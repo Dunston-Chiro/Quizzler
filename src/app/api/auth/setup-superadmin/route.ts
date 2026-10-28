@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const email = (
       body.email ||
       process.env.SUPERADMIN_EMAIL ||
-      "superadmin@quizplatform.local"
+      "superadmin@quizzler.local"
     )
       .trim()
       .toLowerCase();

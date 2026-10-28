@@ -23,7 +23,7 @@ async function main() {
   }
 
   const email = (
-    process.env.SUPERADMIN_EMAIL || "superadmin@quizplatform.local"
+    process.env.SUPERADMIN_EMAIL || "superadmin@quizzler.local"
   )
     .toLowerCase()
     .trim();
