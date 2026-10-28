@@ -33,6 +33,7 @@ import {
   updateQuizStatus,
   toggleResultVisibility,
   toggleLeaderboardVisibility,
+  toggleTabSwitchCountVisibility,
 } from "../src/lib/quiz-service";
 import {
   startOrResumeQuizAttempt,
@@ -275,6 +276,11 @@ async function runTimedEngineTests() {
     console.log(`✓ Received Question 1: "${p1Q1Payload.question.questionText}"`);
     console.log(`  - Time Remaining: ${p1Q1Payload.timeRemainingSeconds}s`);
     console.log(`  - Options Count: ${p1Q1Payload.question.options.length}`);
+    console.log(`  - Live Tab Count Display: ${p1Q1Payload.showTabSwitchCount} (Default: false)`);
+
+    if (p1Q1Payload.showTabSwitchCount !== false) {
+      throw new Error("FAIL: Default showTabSwitchCount must be false during quiz!");
+    }
 
     // Security check: Master keys MUST NOT be present
     if ("correctOptionIds" in p1Q1Payload.question || "explanation" in p1Q1Payload.question) {
@@ -451,6 +457,30 @@ async function runTimedEngineTests() {
       throw new Error("SECURITY VIOLATION: Detailed question breakdown exposed before results released!");
     }
     console.log("✓ Blinded Scorecard Verified: Participant sees completion message without leaked answers.");
+
+    console.log(`✓ Post-Quiz Telemetry Check (#HARD RULE): tabSwitchCount = ${blindedResults.tabSwitchCount}`);
+    if (blindedResults.tabSwitchCount !== 1) {
+      throw new Error("FAIL: Participant cannot view tab switch count after quiz completion!");
+    }
+    console.log("✓ #HARD RULE Passed: Participant can view tab switch count on scorecard after quiz.");
+
+    // -------------------------------------------------------------------------
+    // Test 11b: Admin Toggle for Displaying Tab Switch Count Over Quiz
+    // -------------------------------------------------------------------------
+    console.log("\n[Test 11b] Testing Admin toggle for displaying tab switch count over quiz...");
+    await toggleTabSwitchCountVisibility(quiz.id, true, adminSession);
+    const [updatedQuiz] = await db.select().from(quizzes).where(eq(quizzes.id, quiz.id)).limit(1);
+    if (!updatedQuiz.showTabSwitchCount) {
+      throw new Error("FAIL: Admin toggleTabSwitchCountVisibility failed to enable showTabSwitchCount!");
+    }
+    console.log(`✓ Admin successfully enabled showTabSwitchCount: ${updatedQuiz.showTabSwitchCount}`);
+
+    await toggleTabSwitchCountVisibility(quiz.id, false, adminSession);
+    const [toggledBackQuiz] = await db.select().from(quizzes).where(eq(quizzes.id, quiz.id)).limit(1);
+    if (toggledBackQuiz.showTabSwitchCount) {
+      throw new Error("FAIL: Admin toggleTabSwitchCountVisibility failed to disable showTabSwitchCount!");
+    }
+    console.log(`✓ Admin successfully disabled showTabSwitchCount: ${toggledBackQuiz.showTabSwitchCount}`);
 
     // -------------------------------------------------------------------------
     // Test 12: Admin Releases Results & Enables Top 10 Leaderboard

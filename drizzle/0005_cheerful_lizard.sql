@@ -1,0 +1,1 @@
+ALTER TABLE "quizzes" ADD COLUMN "show_tab_switch_count" boolean DEFAULT false NOT NULL;

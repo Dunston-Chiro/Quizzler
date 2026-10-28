@@ -248,16 +248,23 @@ export default function TimedQuizRunnerClient({
                 <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
                   Proctoring Telemetry
                 </div>
-                <div className="font-mono font-black text-xs text-black mt-0.5">
-                  ⚠️ Tab Switches:{" "}
-                  <span
-                    className={`px-1.5 py-0.2 rounded font-bold ${
-                      tabViolations > 0 ? "bg-[#FF5C5C] text-black" : "bg-emerald-100 text-emerald-800"
-                    }`}
-                  >
-                    {tabViolations} / 3 Flag
-                  </span>
-                </div>
+                {currentData.showTabSwitchCount ? (
+                  <div className="font-mono font-black text-xs text-black mt-0.5">
+                    ⚠️ Tab Switches:{" "}
+                    <span
+                      className={`px-1.5 py-0.2 rounded font-bold ${
+                        tabViolations > 0 ? "bg-[#FF5C5C] text-black" : "bg-emerald-100 text-emerald-800"
+                      }`}
+                    >
+                      {tabViolations} / 3 Flag
+                    </span>
+                  </div>
+                ) : (
+                  <div className="font-mono font-black text-xs text-emerald-700 mt-0.5 flex items-center justify-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    ANTI-CHEAT ACTIVE
+                  </div>
+                )}
               </div>
             </div>
 

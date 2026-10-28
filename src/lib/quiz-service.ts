@@ -30,6 +30,7 @@ export interface QuizInput {
   description?: string;
   defaultTimePerQuestionSec?: number;
   shuffleQuestions?: boolean;
+  showTabSwitchCount?: boolean;
   roomCode?: string;
 }
 
@@ -88,6 +89,8 @@ export async function getAdminQuizzes(session: SessionPayload) {
       creatorEmail: users.email,
       sessionStatus: quizzes.sessionStatus,
       resultsReleased: quizzes.resultsReleased,
+      showLeaderboard: quizzes.showLeaderboard,
+      showTabSwitchCount: quizzes.showTabSwitchCount,
       defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
       totalQuestions: quizzes.totalQuestions,
       totalPoints: quizzes.totalPoints,
@@ -158,6 +161,7 @@ export async function createQuiz(input: QuizInput, session: SessionPayload) {
       createdBy: session.userId,
       sessionStatus: "DRAFT",
       resultsReleased: false,
+      showTabSwitchCount: input.showTabSwitchCount || false,
       defaultTimePerQuestionSec: input.defaultTimePerQuestionSec || 30,
       shuffleQuestions: input.shuffleQuestions || false,
       totalQuestions: 0,
@@ -198,6 +202,9 @@ export async function updateQuiz(
   }
   if (input.shuffleQuestions !== undefined) {
     updateData.shuffleQuestions = input.shuffleQuestions;
+  }
+  if (input.showTabSwitchCount !== undefined) {
+    updateData.showTabSwitchCount = input.showTabSwitchCount;
   }
   if (input.roomCode !== undefined) {
     updateData.roomCode = input.roomCode.trim().toUpperCase();
@@ -579,6 +586,37 @@ export async function toggleLeaderboardVisibility(
     .update(quizzes)
     .set({
       showLeaderboard,
+      updatedAt: new Date(),
+    })
+    .where(eq(quizzes.id, quizId))
+    .returning();
+
+  return updated;
+}
+
+/**
+ * 11c. Toggle Tab Switch Count Visibility for Participants
+ */
+export async function toggleTabSwitchCountVisibility(
+  quizId: string,
+  showTabSwitchCount: boolean,
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [quiz] = await db
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
+  assertOwnership(quiz.createdBy, session, "Quiz");
+
+  const [updated] = await db
+    .update(quizzes)
+    .set({
+      showTabSwitchCount,
       updatedAt: new Date(),
     })
     .where(eq(quizzes.id, quizId))

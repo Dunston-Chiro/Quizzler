@@ -48,6 +48,7 @@ export default function QuizManagerClient({
     () => `QZ-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
   );
   const [newDefaultTime, setNewDefaultTime] = useState(30);
+  const [newShowTabSwitchCount, setNewShowTabSwitchCount] = useState(false);
 
   // Filter quizzes
   const filteredQuizzes = quizzes.filter((quiz) => {
@@ -73,12 +74,14 @@ export default function QuizManagerClient({
         description: newDescription.trim() || undefined,
         roomCode: newRoomCode.trim().toUpperCase(),
         defaultTimePerQuestionSec: Number(newDefaultTime) || 30,
+        showTabSwitchCount: newShowTabSwitchCount,
       });
 
       if (result.success && result.data) {
         setShowCreateModal(false);
         setNewTitle("");
         setNewDescription("");
+        setNewShowTabSwitchCount(false);
         setNewRoomCode(`QZ-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
         router.refresh();
       } else {
@@ -398,6 +401,21 @@ export default function QuizManagerClient({
                     className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-900"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={newShowTabSwitchCount}
+                    onChange={(e) => setNewShowTabSwitchCount(e.target.checked)}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                  />
+                  <span>Display tab switch count to participants during quiz</span>
+                </label>
+                <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                  When unchecked (default), tab switch counts remain hidden during the test to prevent distraction, but will always appear on the final scorecard.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">

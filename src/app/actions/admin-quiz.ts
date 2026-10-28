@@ -13,6 +13,7 @@ import {
   updateQuizStatus,
   toggleResultVisibility,
   toggleLeaderboardVisibility,
+  toggleTabSwitchCountVisibility,
   toggleAttemptQualification,
   QuestionInput,
   QuizInput,
@@ -294,6 +295,36 @@ export async function toggleLeaderboardVisibilityAction(
     return { success: true, data: updated };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to toggle leaderboard visibility.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function toggleTabSwitchCountVisibilityAction(
+  quizId: string,
+  showTabSwitchCount: boolean
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const updated = await toggleTabSwitchCountVisibility(quizId, showTabSwitchCount, session);
+    await logActivity({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: showTabSwitchCount
+        ? "QUIZ_TAB_COUNT_DISPLAY_ENABLED"
+        : "QUIZ_TAB_COUNT_DISPLAY_DISABLED",
+      category: "QUIZ",
+      targetEntity: "QUIZ",
+      targetId: quizId,
+    });
+    revalidatePath(`/admin/quizzes/${quizId}`);
+    revalidatePath(`/admin/quizzes/${quizId}/live`);
+    revalidatePath(`/participant/quiz/${quizId}/runner`);
+    return { success: true, data: updated };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Failed to toggle tab switch count visibility.";
     return { success: false, error: msg };
   }
 }

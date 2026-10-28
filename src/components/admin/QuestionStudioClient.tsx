@@ -35,6 +35,7 @@ interface QuizItem {
   roomCode?: string | null;
   sessionStatus: "DRAFT" | "SCHEDULED" | "LIVE" | "ENDED";
   resultsReleased: boolean;
+  showTabSwitchCount?: boolean;
   defaultTimePerQuestionSec: number;
   totalQuestions: number;
   totalPoints: number;
@@ -64,6 +65,9 @@ export default function QuestionStudioClient({
   const [editDesc, setEditDesc] = useState(quiz.description || "");
   const [editRoomCode, setEditRoomCode] = useState(quiz.roomCode || "");
   const [editTimer, setEditTimer] = useState(quiz.defaultTimePerQuestionSec);
+  const [editShowTabSwitchCount, setEditShowTabSwitchCount] = useState(
+    Boolean(quiz.showTabSwitchCount)
+  );
 
   // Question Form State (for adding or editing)
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -295,6 +299,7 @@ export default function QuestionStudioClient({
         description: editDesc.trim(),
         roomCode: editRoomCode.trim().toUpperCase(),
         defaultTimePerQuestionSec: Number(editTimer) || 30,
+        showTabSwitchCount: editShowTabSwitchCount,
       });
 
       if (res.success && res.data) {
@@ -304,6 +309,7 @@ export default function QuestionStudioClient({
           description: editDesc.trim(),
           roomCode: editRoomCode.trim().toUpperCase(),
           defaultTimePerQuestionSec: Number(editTimer) || 30,
+          showTabSwitchCount: editShowTabSwitchCount,
         }));
         setShowSettingsModal(false);
         router.refresh();
@@ -820,6 +826,21 @@ export default function QuestionStudioClient({
                     className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-900"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editShowTabSwitchCount}
+                    onChange={(e) => setEditShowTabSwitchCount(e.target.checked)}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                  />
+                  <span>Display tab switch count to participants during quiz</span>
+                </label>
+                <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                  When unchecked (default), tab switch counts remain hidden during the test to prevent distraction, but will always appear on the final scorecard.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">

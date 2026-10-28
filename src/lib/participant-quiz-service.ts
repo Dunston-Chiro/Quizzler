@@ -29,6 +29,7 @@ export interface ParticipantQuestionPayload {
   };
   timeRemainingSeconds: number;
   tabSwitchCount: number;
+  showTabSwitchCount: boolean;
   isLastQuestion: boolean;
 }
 
@@ -405,6 +406,7 @@ export async function getAuthoritativeCurrentQuestion(
       },
       timeRemainingSeconds: Math.max(0, remainingSec),
       tabSwitchCount: attempt.tabSwitchCount,
+      showTabSwitchCount: Boolean(quiz.showTabSwitchCount),
       isLastQuestion: currentIndex === questionOrder.length - 1,
     };
   }

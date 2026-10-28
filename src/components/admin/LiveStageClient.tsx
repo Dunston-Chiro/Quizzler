@@ -5,6 +5,7 @@ import {
   updateQuizStatusAction,
   toggleResultVisibilityAction,
   toggleLeaderboardVisibilityAction,
+  toggleTabSwitchCountVisibilityAction,
   toggleQualificationAction,
   createQuestionAction,
   updateQuizAction,
@@ -21,6 +22,7 @@ interface LiveStageClientProps {
       sessionStatus: "DRAFT" | "SCHEDULED" | "LIVE" | "ENDED";
       resultsReleased: boolean;
       showLeaderboard?: boolean;
+      showTabSwitchCount?: boolean;
       defaultTimePerQuestionSec: number;
       totalQuestions: number;
     };
@@ -167,6 +169,19 @@ export default function LiveStageClient({
         setData((prev) => ({
           ...prev,
           quiz: { ...prev.quiz, showLeaderboard: newVal },
+        }));
+      }
+    });
+  };
+
+  const handleToggleTabSwitchCount = () => {
+    startTransition(async () => {
+      const newVal = !quiz.showTabSwitchCount;
+      const res = await toggleTabSwitchCountVisibilityAction(quizId, newVal);
+      if (res.success) {
+        setData((prev) => ({
+          ...prev,
+          quiz: { ...prev.quiz, showTabSwitchCount: newVal },
         }));
       }
     });
@@ -386,6 +401,18 @@ export default function LiveStageClient({
             />
             <span className={quiz.showLeaderboard ? "text-amber-800 font-bold" : ""}>
               Show Top 10 Leaderboard
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+            <input
+              type="checkbox"
+              checked={Boolean(quiz.showTabSwitchCount)}
+              onChange={handleToggleTabSwitchCount}
+              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+            />
+            <span className={quiz.showTabSwitchCount ? "text-indigo-800 font-bold" : ""}>
+              Display Tab Switch Count over Quiz
             </span>
           </label>
         </div>
