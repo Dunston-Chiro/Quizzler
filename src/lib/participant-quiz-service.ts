@@ -41,6 +41,7 @@ export interface QuizAttemptResultPayload {
   status: "IN_PROGRESS" | "COMPLETED" | "DISQUALIFIED";
   resultsReleased: boolean;
   showLeaderboard: boolean;
+  showTabSwitchCount: boolean;
   totalScore: number;
   totalPossiblePoints: number;
   totalQuestions: number;
@@ -737,6 +738,7 @@ export async function getParticipantResults(
       status: attempt.status,
       resultsReleased: false,
       showLeaderboard: quiz.showLeaderboard,
+      showTabSwitchCount: Boolean(quiz.showTabSwitchCount),
       totalScore: attempt.totalScore,
       totalPossiblePoints: quiz.totalPoints,
       totalQuestions,
@@ -787,6 +789,7 @@ export async function getParticipantResults(
     status: attempt.status,
     resultsReleased: true,
     showLeaderboard: quiz.showLeaderboard,
+    showTabSwitchCount: Boolean(quiz.showTabSwitchCount),
     totalScore: attempt.totalScore,
     totalPossiblePoints: quiz.totalPoints,
     totalQuestions,

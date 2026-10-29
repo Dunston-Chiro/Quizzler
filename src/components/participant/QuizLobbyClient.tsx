@@ -15,6 +15,7 @@ interface QuizLobbyClientProps {
     totalQuestions: number;
     totalPoints: number;
     defaultTimePerQuestionSec: number;
+    showTabSwitchCount?: boolean;
   };
   existingAttempt: {
     id: string;
@@ -107,14 +108,23 @@ export default function QuizLobbyClient({
               <span className="font-bold text-black shrink-0">2.</span>
               <span><strong>{quiz.defaultTimePerQuestionSec}-Second Server Countdown:</strong> Each question carries an authoritative timer. When time expires, your choice is automatically sealed and the next question loads.</span>
             </li>
-            <li className="flex items-start gap-2">
-              <span className="font-bold text-black shrink-0">3.</span>
-              <span><strong>Anti-Cheat Shield Active:</strong> Window blur and tab switching are logged to the proctoring monitor in real-time.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="font-bold text-black shrink-0">4.</span>
-              <span><strong>Disconnection Recovery:</strong> If your network drops or page reloads, re-entering resumes your active question and remaining time.</span>
-            </li>
+            {quiz.showTabSwitchCount ? (
+              <>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-black shrink-0">3.</span>
+                  <span><strong>Anti-Cheat Shield Active:</strong> Window blur and tab switching are logged to the proctoring monitor in real-time.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="font-bold text-black shrink-0">4.</span>
+                  <span><strong>Disconnection Recovery:</strong> If your network drops or page reloads, re-entering resumes your active question and remaining time.</span>
+                </li>
+              </>
+            ) : (
+              <li className="flex items-start gap-2">
+                <span className="font-bold text-black shrink-0">3.</span>
+                <span><strong>Disconnection Recovery:</strong> If your network drops or page reloads, re-entering resumes your active question and remaining time.</span>
+              </li>
+            )}
           </ul>
         </div>
 

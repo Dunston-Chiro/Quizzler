@@ -458,11 +458,14 @@ async function runTimedEngineTests() {
     }
     console.log("✓ Blinded Scorecard Verified: Participant sees completion message without leaked answers.");
 
-    console.log(`✓ Post-Quiz Telemetry Check (#HARD RULE): tabSwitchCount = ${blindedResults.tabSwitchCount}`);
+    console.log(`✓ Post-Quiz Telemetry Check: tabSwitchCount = ${blindedResults.tabSwitchCount}, showTabSwitchCount = ${blindedResults.showTabSwitchCount}`);
     if (blindedResults.tabSwitchCount !== 1) {
       throw new Error("FAIL: Participant cannot view tab switch count after quiz completion!");
     }
-    console.log("✓ #HARD RULE Passed: Participant can view tab switch count on scorecard after quiz.");
+    if (blindedResults.showTabSwitchCount !== false) {
+      throw new Error("FAIL: Default showTabSwitchCount on scorecard must be false when disabled!");
+    }
+    console.log("✓ Participant Scorecard respects admin toggle (tabSwitchCount hidden when disabled).");
 
     // -------------------------------------------------------------------------
     // Test 11b: Admin Toggle for Displaying Tab Switch Count Over Quiz
@@ -474,6 +477,12 @@ async function runTimedEngineTests() {
       throw new Error("FAIL: Admin toggleTabSwitchCountVisibility failed to enable showTabSwitchCount!");
     }
     console.log(`✓ Admin successfully enabled showTabSwitchCount: ${updatedQuiz.showTabSwitchCount}`);
+
+    const resultsWithTabCount = await getParticipantResults(p1AttemptRes.attemptId, p1Session);
+    if (!resultsWithTabCount.showTabSwitchCount) {
+      throw new Error("FAIL: showTabSwitchCount should be true on results when enabled by admin!");
+    }
+    console.log("✓ Participant Scorecard shows tab switch count when enabled by admin.");
 
     await toggleTabSwitchCountVisibility(quiz.id, false, adminSession);
     const [toggledBackQuiz] = await db.select().from(quizzes).where(eq(quizzes.id, quiz.id)).limit(1);

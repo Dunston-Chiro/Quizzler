@@ -65,8 +65,8 @@ export default function QuizResultsClient({
         </div>
       </div>
 
-      {/* 4 Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      {/* Metric Cards (Tab Count shown only if enabled by admin) */}
+      <div className={`grid gap-4 mb-8 ${data.showTabSwitchCount ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 sm:grid-cols-3"}`}>
         <div className="bg-white border-3 border-black p-4 shadow-[4px_4px_0px_#000]">
           <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
             Questions Answered
@@ -99,15 +99,17 @@ export default function QuizResultsClient({
           </div>
         </div>
 
-        <div className="bg-white border-3 border-black p-4 shadow-[4px_4px_0px_#000]">
-          <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
-            Proctor Telemetry
+        {data.showTabSwitchCount && (
+          <div className="bg-white border-3 border-black p-4 shadow-[4px_4px_0px_#000]">
+            <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
+              Proctor Telemetry
+            </div>
+            <div className="font-mono font-black text-2xl text-black mt-1">
+              {data.tabSwitchCount === 0 ? "CLEAR" : `${data.tabSwitchCount} FLAGS`}
+            </div>
+            <div className="font-mono text-[11px] text-neutral-500 mt-0.5">Tab switches logged</div>
           </div>
-          <div className="font-mono font-black text-2xl text-black mt-1">
-            {data.tabSwitchCount === 0 ? "CLEAR" : `${data.tabSwitchCount} FLAGS`}
-          </div>
-          <div className="font-mono text-[11px] text-neutral-500 mt-0.5">Tab switches logged</div>
-        </div>
+        )}
       </div>
 
       {/* Results Released vs Blinded Notification */}

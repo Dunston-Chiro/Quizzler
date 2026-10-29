@@ -53,6 +53,7 @@ export default async function ParticipantQuizLobbyPage({ params }: PageProps) {
           totalQuestions: quiz.totalQuestions,
           totalPoints: quiz.totalPoints,
           defaultTimePerQuestionSec: quiz.defaultTimePerQuestionSec,
+          showTabSwitchCount: quiz.showTabSwitchCount,
         }}
         existingAttempt={existingAttempt || null}
         userName={session.name}

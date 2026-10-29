@@ -121,25 +121,27 @@ export default function TimedQuizRunnerClient({
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setTabViolations((v) => v + 1);
-        setWarningToast("⚠️ Tab switch detected! Event logged to proctoring audit log.");
+        if (currentData.showTabSwitchCount) {
+          setWarningToast("⚠️ Tab switch detected! Event logged to proctoring audit log.");
+          violationTimeout = setTimeout(() => setWarningToast(null), 4000);
+        }
 
         startTransition(async () => {
           await reportProctorViolationAction(currentData.attemptId, "TAB_SWITCH");
         });
-
-        violationTimeout = setTimeout(() => setWarningToast(null), 4000);
       }
     };
 
     const handleWindowBlur = () => {
       setTabViolations((v) => v + 1);
-      setWarningToast("⚠️ Focus lost! Keep your browser in full focus.");
+      if (currentData.showTabSwitchCount) {
+        setWarningToast("⚠️ Focus lost! Keep your browser in full focus.");
+        violationTimeout = setTimeout(() => setWarningToast(null), 4000);
+      }
 
       startTransition(async () => {
         await reportProctorViolationAction(currentData.attemptId, "WINDOW_BLUR");
       });
-
-      violationTimeout = setTimeout(() => setWarningToast(null), 4000);
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -150,7 +152,7 @@ export default function TimedQuizRunnerClient({
       window.removeEventListener("blur", handleWindowBlur);
       clearTimeout(violationTimeout);
     };
-  }, [currentData.attemptId]);
+  }, [currentData.attemptId, currentData.showTabSwitchCount]);
 
   // Handle Option Click
   const handleToggleOption = (optId: string) => {
@@ -182,7 +184,7 @@ export default function TimedQuizRunnerClient({
   return (
     <div className="min-h-screen bg-[#FFFDF8] text-black font-sans pb-16 selection:bg-[#FFE600]">
       {/* Top Warning Banner if Violations Occur */}
-      {warningToast && (
+      {currentData.showTabSwitchCount && warningToast && (
         <div className="bg-[#FF5C5C] text-black border-b-4 border-black px-4 py-2 text-center font-mono font-black text-xs shadow-md sticky top-0 z-50 animate-bounce">
           {warningToast}
         </div>
@@ -198,9 +200,11 @@ export default function TimedQuizRunnerClient({
             <div className="hidden sm:inline-block bg-black text-[#00F0FF] border-2 border-black px-2.5 py-0.5 font-mono text-xs font-bold uppercase">
               ROOM: {currentData.roomCode || "ARENA"}
             </div>
-            <div className="hidden md:inline-block bg-[#00F0FF] border-2 border-black px-2.5 py-0.5 font-mono text-xs font-bold uppercase shadow-[2px_2px_0px_#000]">
-              GUARD: TAB LOCK ON
-            </div>
+            {currentData.showTabSwitchCount && (
+              <div className="hidden md:inline-block bg-[#00F0FF] border-2 border-black px-2.5 py-0.5 font-mono text-xs font-bold uppercase shadow-[2px_2px_0px_#000]">
+                GUARD: TAB LOCK ON
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3 font-mono text-xs">
@@ -219,7 +223,7 @@ export default function TimedQuizRunnerClient({
       <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
         {/* Subheader: Progress & Critical Clock */}
         <div className="bg-white border-4 border-black p-4 sm:p-5 shadow-[6px_6px_0px_#000] mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          <div className={`grid grid-cols-1 ${currentData.showTabSwitchCount ? "md:grid-cols-3" : "md:grid-cols-2"} gap-4 items-center`}>
             {/* Progress Column */}
             <div>
               <div className="flex items-center gap-2 mb-1.5">
@@ -242,13 +246,13 @@ export default function TimedQuizRunnerClient({
               </div>
             </div>
 
-            {/* Tab Violations Column */}
-            <div className="text-center md:border-x-2 md:border-black px-2">
-              <div className="inline-block bg-[#FFFDF8] border-2 border-black p-2 shadow-[2px_2px_0px_#000] w-full">
-                <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
-                  Proctoring Telemetry
-                </div>
-                {currentData.showTabSwitchCount ? (
+            {/* Tab Violations Column (Only rendered when enabled by admin) */}
+            {currentData.showTabSwitchCount && (
+              <div className="text-center md:border-x-2 md:border-black px-2">
+                <div className="inline-block bg-[#FFFDF8] border-2 border-black p-2 shadow-[2px_2px_0px_#000] w-full">
+                  <div className="font-mono text-[10px] text-neutral-500 uppercase font-black">
+                    Proctoring Telemetry
+                  </div>
                   <div className="font-mono font-black text-xs text-black mt-0.5">
                     ⚠️ Tab Switches:{" "}
                     <span
@@ -259,14 +263,9 @@ export default function TimedQuizRunnerClient({
                       {tabViolations} / 3 Flag
                     </span>
                   </div>
-                ) : (
-                  <div className="font-mono font-black text-xs text-emerald-700 mt-0.5 flex items-center justify-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    ANTI-CHEAT ACTIVE
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Critical Clock Column */}
             <div className="flex items-center justify-end">
@@ -399,7 +398,15 @@ export default function TimedQuizRunnerClient({
 
         {/* Security Footer Notice */}
         <div className="bg-black text-[#00F0FF] border-3 border-black p-3 font-mono text-xs text-center shadow-[4px_4px_0px_#000]">
-          <span className="font-black text-[#FFE600] uppercase">LOCK-SCREEN ACTIVE:</span> Do not switch tabs, exit window focus, or inspect elements. Response timestamps are server-authoritative.
+          {currentData.showTabSwitchCount ? (
+            <>
+              <span className="font-black text-[#FFE600] uppercase">LOCK-SCREEN ACTIVE:</span> Do not switch tabs, exit window focus, or inspect elements. Response timestamps are server-authoritative.
+            </>
+          ) : (
+            <>
+              <span className="font-black text-[#FFE600] uppercase">TIMED SPRINT ARENA:</span> Answer before the critical countdown reaches zero. Response timestamps are server-authoritative.
+            </>
+          )}
         </div>
       </main>
     </div>
