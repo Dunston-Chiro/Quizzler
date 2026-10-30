@@ -14,7 +14,9 @@ import {
   toggleResultVisibility,
   toggleLeaderboardVisibility,
   toggleTabSwitchCountVisibility,
+  toggleQuizSharing,
   toggleAttemptQualification,
+  getStudentAttemptReview,
   QuestionInput,
   QuizInput,
 } from "@/lib/quiz-service";
@@ -350,6 +352,54 @@ export async function toggleQualificationAction(
     return { success: true, data: updated };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to toggle candidate qualification.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function toggleQuizSharingAction(
+  quizId: string,
+  isSharedWithAdmins: boolean
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const updated = await toggleQuizSharing(quizId, isSharedWithAdmins, session);
+    await logActivity({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: isSharedWithAdmins
+        ? "QUIZ_SHARING_ENABLED"
+        : "QUIZ_SHARING_DISABLED",
+      category: "QUIZ",
+      targetEntity: "QUIZ",
+      targetId: quizId,
+    });
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/quizzes");
+    revalidatePath(`/admin/quizzes/${quizId}`);
+    revalidatePath(`/admin/quizzes/${quizId}/live`);
+    return { success: true, data: updated };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Failed to toggle quiz sharing setting.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function getStudentAttemptReviewAction(
+  quizId: string,
+  attemptId: string
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const reviewData = await getStudentAttemptReview(quizId, attemptId, session);
+    return { success: true, data: reviewData };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Failed to fetch student answer review.";
     return { success: false, error: msg };
   }
 }

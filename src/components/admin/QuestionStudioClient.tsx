@@ -36,6 +36,7 @@ interface QuizItem {
   sessionStatus: "DRAFT" | "SCHEDULED" | "LIVE" | "ENDED";
   resultsReleased: boolean;
   showTabSwitchCount?: boolean;
+  isSharedWithAdmins?: boolean;
   defaultTimePerQuestionSec: number;
   totalQuestions: number;
   totalPoints: number;
@@ -67,6 +68,9 @@ export default function QuestionStudioClient({
   const [editTimer, setEditTimer] = useState(quiz.defaultTimePerQuestionSec);
   const [editShowTabSwitchCount, setEditShowTabSwitchCount] = useState(
     Boolean(quiz.showTabSwitchCount)
+  );
+  const [editIsSharedWithAdmins, setEditIsSharedWithAdmins] = useState(
+    Boolean(quiz.isSharedWithAdmins)
   );
 
   // Question Form State (for adding or editing)
@@ -300,6 +304,7 @@ export default function QuestionStudioClient({
         roomCode: editRoomCode.trim().toUpperCase(),
         defaultTimePerQuestionSec: Number(editTimer) || 30,
         showTabSwitchCount: editShowTabSwitchCount,
+        isSharedWithAdmins: editIsSharedWithAdmins,
       });
 
       if (res.success && res.data) {
@@ -310,6 +315,7 @@ export default function QuestionStudioClient({
           roomCode: editRoomCode.trim().toUpperCase(),
           defaultTimePerQuestionSec: Number(editTimer) || 30,
           showTabSwitchCount: editShowTabSwitchCount,
+          isSharedWithAdmins: editIsSharedWithAdmins,
         }));
         setShowSettingsModal(false);
         router.refresh();
@@ -840,6 +846,21 @@ export default function QuestionStudioClient({
                 </label>
                 <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
                   When unchecked (default), tab switch counts remain hidden during the test to prevent distraction, but will always appear on the final scorecard.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editIsSharedWithAdmins}
+                    onChange={(e) => setEditIsSharedWithAdmins(e.target.checked)}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                  />
+                  <span>Share live quiz with other Admins</span>
+                </label>
+                <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                  Allow other authenticated administrators to observe this live quiz session in view-only mode.
                 </p>
               </div>
 

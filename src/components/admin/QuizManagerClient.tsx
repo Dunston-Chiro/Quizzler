@@ -16,6 +16,7 @@ export interface AdminQuizItem {
   sessionStatus: "DRAFT" | "SCHEDULED" | "LIVE" | "ENDED";
   resultsReleased: boolean;
   defaultTimePerQuestionSec: number;
+  isSharedWithAdmins?: boolean;
   totalQuestions: number;
   totalPoints: number;
   createdAt: Date | string;
@@ -49,6 +50,7 @@ export default function QuizManagerClient({
   );
   const [newDefaultTime, setNewDefaultTime] = useState(30);
   const [newShowTabSwitchCount, setNewShowTabSwitchCount] = useState(false);
+  const [newIsSharedWithAdmins, setNewIsSharedWithAdmins] = useState(false);
 
   // Filter quizzes
   const filteredQuizzes = quizzes.filter((quiz) => {
@@ -75,6 +77,7 @@ export default function QuizManagerClient({
         roomCode: newRoomCode.trim().toUpperCase(),
         defaultTimePerQuestionSec: Number(newDefaultTime) || 30,
         showTabSwitchCount: newShowTabSwitchCount,
+        isSharedWithAdmins: newIsSharedWithAdmins,
       });
 
       if (result.success && result.data) {
@@ -82,6 +85,7 @@ export default function QuizManagerClient({
         setNewTitle("");
         setNewDescription("");
         setNewShowTabSwitchCount(false);
+        setNewIsSharedWithAdmins(false);
         setNewRoomCode(`QZ-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
         router.refresh();
       } else {
@@ -415,6 +419,21 @@ export default function QuizManagerClient({
                 </label>
                 <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
                   When unchecked (default), tab switch counts remain hidden during the test to prevent distraction, but will always appear on the final scorecard.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={newIsSharedWithAdmins}
+                    onChange={(e) => setNewIsSharedWithAdmins(e.target.checked)}
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                  />
+                  <span>Share live quiz with other Admins</span>
+                </label>
+                <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                  Allow other authenticated administrators to monitor this live quiz session in view-only mode.
                 </p>
               </div>
 

@@ -1,0 +1,1 @@
+ALTER TABLE "quizzes" ADD COLUMN "is_shared_with_admins" boolean DEFAULT false NOT NULL;

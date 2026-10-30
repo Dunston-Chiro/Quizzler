@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, asc } from "drizzle-orm";
+import { eq, and, ne, sql, desc, asc } from "drizzle-orm";
 import db from "@/db";
 import {
   quizzes,
@@ -31,6 +31,7 @@ export interface QuizInput {
   defaultTimePerQuestionSec?: number;
   shuffleQuestions?: boolean;
   showTabSwitchCount?: boolean;
+  isSharedWithAdmins?: boolean;
   roomCode?: string;
 }
 
@@ -91,6 +92,7 @@ export async function getAdminQuizzes(session: SessionPayload) {
       resultsReleased: quizzes.resultsReleased,
       showLeaderboard: quizzes.showLeaderboard,
       showTabSwitchCount: quizzes.showTabSwitchCount,
+      isSharedWithAdmins: quizzes.isSharedWithAdmins,
       defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
       totalQuestions: quizzes.totalQuestions,
       totalPoints: quizzes.totalPoints,
@@ -106,6 +108,43 @@ export async function getAdminQuizzes(session: SessionPayload) {
   }
 
   return await query.orderBy(desc(quizzes.createdAt));
+}
+
+/**
+ * 1b. Get Shared Live Quizzes for Admin (Quizzes owned by other admins with sharing enabled)
+ */
+export async function getSharedLiveQuizzes(session: SessionPayload) {
+  assertAdminRole(session);
+
+  return await db
+    .select({
+      id: quizzes.id,
+      title: quizzes.title,
+      description: quizzes.description,
+      roomCode: quizzes.roomCode,
+      createdBy: quizzes.createdBy,
+      creatorName: users.name,
+      creatorEmail: users.email,
+      sessionStatus: quizzes.sessionStatus,
+      resultsReleased: quizzes.resultsReleased,
+      showLeaderboard: quizzes.showLeaderboard,
+      showTabSwitchCount: quizzes.showTabSwitchCount,
+      isSharedWithAdmins: quizzes.isSharedWithAdmins,
+      defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
+      totalQuestions: quizzes.totalQuestions,
+      totalPoints: quizzes.totalPoints,
+      createdAt: quizzes.createdAt,
+      updatedAt: quizzes.updatedAt,
+    })
+    .from(quizzes)
+    .innerJoin(users, eq(quizzes.createdBy, users.id))
+    .where(
+      and(
+        eq(quizzes.isSharedWithAdmins, true),
+        ne(quizzes.createdBy, session.userId)
+      )
+    )
+    .orderBy(desc(quizzes.updatedAt));
 }
 
 /**
@@ -162,6 +201,7 @@ export async function createQuiz(input: QuizInput, session: SessionPayload) {
       sessionStatus: "DRAFT",
       resultsReleased: false,
       showTabSwitchCount: input.showTabSwitchCount || false,
+      isSharedWithAdmins: input.isSharedWithAdmins || false,
       defaultTimePerQuestionSec: input.defaultTimePerQuestionSec || 30,
       shuffleQuestions: input.shuffleQuestions || false,
       totalQuestions: 0,
@@ -205,6 +245,9 @@ export async function updateQuiz(
   }
   if (input.showTabSwitchCount !== undefined) {
     updateData.showTabSwitchCount = input.showTabSwitchCount;
+  }
+  if (input.isSharedWithAdmins !== undefined) {
+    updateData.isSharedWithAdmins = input.isSharedWithAdmins;
   }
   if (input.roomCode !== undefined) {
     updateData.roomCode = input.roomCode.trim().toUpperCase();
@@ -626,6 +669,37 @@ export async function toggleTabSwitchCountVisibility(
 }
 
 /**
+ * 11d. Toggle Live Quiz Sharing with other Admins
+ */
+export async function toggleQuizSharing(
+  quizId: string,
+  isSharedWithAdmins: boolean,
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [quiz] = await db
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
+  assertOwnership(quiz.createdBy, session, "Quiz");
+
+  const [updated] = await db
+    .update(quizzes)
+    .set({
+      isSharedWithAdmins,
+      updatedAt: new Date(),
+    })
+    .where(eq(quizzes.id, quizId))
+    .returning();
+
+  return updated;
+}
+
+/**
  * 12. Toggle Round 2 Qualification for a participant attempt
  */
 export async function toggleAttemptQualification(
@@ -677,7 +751,25 @@ export async function getLiveStageTelemetry(
     .limit(1);
 
   if (!quiz) return null;
-  assertOwnership(quiz.createdBy, session, "Quiz");
+
+  const isOwner = quiz.createdBy === session.userId;
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
+  const isShared = Boolean(quiz.isSharedWithAdmins);
+
+  if (!isOwner && !isSuperAdmin) {
+    if (!isShared) {
+      assertOwnership(quiz.createdBy, session, "Quiz");
+    }
+  }
+
+  const isReadOnly = !isOwner && !isSuperAdmin;
+
+  // Retrieve creator's info
+  const [creator] = await db
+    .select({ name: users.name, email: users.email })
+    .from(users)
+    .where(eq(users.id, quiz.createdBy))
+    .limit(1);
 
   // Fetch all questions for this quiz in order
   const quizQuestions = await db
@@ -711,6 +803,7 @@ export async function getLiveStageTelemetry(
       status: participantAttempts.status,
       qualifiedForNextRound: participantAttempts.qualifiedForNextRound,
       startedAt: participantAttempts.startedAt,
+      completedAt: participantAttempts.completedAt,
     })
     .from(participantAttempts)
     .innerJoin(users, eq(participantAttempts.userId, users.id))
@@ -781,7 +874,12 @@ export async function getLiveStageTelemetry(
     totalSubmissions > 0 ? Math.round((totalCorrect / totalSubmissions) * 100 * 10) / 10 : 0;
 
   return {
-    quiz,
+    quiz: {
+      ...quiz,
+      isSharedWithAdmins: Boolean(quiz.isSharedWithAdmins),
+      ownerName: creator?.name || "Organizer",
+      isReadOnly,
+    },
     questions: quizQuestions,
     attempts,
     answers: answersList,
@@ -795,5 +893,150 @@ export async function getLiveStageTelemetry(
       overallAccuracy,
       questionAccuracy,
     },
+  };
+}
+
+/**
+ * 14. Student Attempt Review for Admin Modal
+ */
+export async function getStudentAttemptReview(
+  quizId: string,
+  attemptId: string,
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [quiz] = await db
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
+
+  const isOwner = quiz.createdBy === session.userId;
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
+  const isShared = Boolean(quiz.isSharedWithAdmins);
+
+  if (!isOwner && !isSuperAdmin && !isShared) {
+    assertOwnership(quiz.createdBy, session, "Quiz");
+  }
+
+  const isReadOnly = !isOwner && !isSuperAdmin;
+
+  // Retrieve attempt
+  const [attempt] = await db
+    .select({
+      id: participantAttempts.id,
+      userId: participantAttempts.userId,
+      quizId: participantAttempts.quizId,
+      currentQuestionIndex: participantAttempts.currentQuestionIndex,
+      totalScore: participantAttempts.totalScore,
+      tabSwitchCount: participantAttempts.tabSwitchCount,
+      status: participantAttempts.status,
+      qualifiedForNextRound: participantAttempts.qualifiedForNextRound,
+      startedAt: participantAttempts.startedAt,
+      completedAt: participantAttempts.completedAt,
+    })
+    .from(participantAttempts)
+    .where(
+      and(
+        eq(participantAttempts.id, attemptId),
+        eq(participantAttempts.quizId, quizId)
+      )
+    )
+    .limit(1);
+
+  if (!attempt) throw new Error("NOT_FOUND: Participant attempt does not exist.");
+
+  // Retrieve student user info
+  const [student] = await db
+    .select({
+      name: users.name,
+      email: users.email,
+      teamName: users.teamName,
+      collegeName: users.collegeName,
+      rollNumber: users.rollNumber,
+    })
+    .from(users)
+    .where(eq(users.id, attempt.userId))
+    .limit(1);
+
+  // Retrieve all questions
+  const quizQuestions = await db
+    .select({
+      id: questions.id,
+      orderIndex: questions.orderIndex,
+      questionText: questions.questionText,
+      questionType: questions.questionType,
+      codeSnippet: questions.codeSnippet,
+      options: questions.options,
+      correctOptionIds: questions.correctOptionIds,
+      explanation: questions.explanation,
+      points: questions.points,
+      timeLimitSeconds: questions.timeLimitSeconds,
+    })
+    .from(questions)
+    .where(eq(questions.quizId, quizId))
+    .orderBy(asc(questions.orderIndex));
+
+  // Retrieve student's submitted answers
+  const studentAnswers = await db
+    .select({
+      id: participantAnswers.id,
+      questionId: participantAnswers.questionId,
+      selectedOptionIds: participantAnswers.selectedOptionIds,
+      startedAt: participantAnswers.startedAt,
+      submittedAt: participantAnswers.submittedAt,
+      isCorrect: participantAnswers.isCorrect,
+      scoreAwarded: participantAnswers.scoreAwarded,
+      timedOut: participantAnswers.timedOut,
+    })
+    .from(participantAnswers)
+    .where(eq(participantAnswers.attemptId, attemptId));
+
+  const questionsReview = quizQuestions.map((q) => {
+    const ans = studentAnswers.find((a) => a.questionId === q.id);
+    return {
+      questionId: q.id,
+      orderIndex: q.orderIndex,
+      questionText: q.questionText,
+      questionType: q.questionType,
+      codeSnippet: q.codeSnippet,
+      points: q.points,
+      timeLimitSeconds: q.timeLimitSeconds,
+      options: q.options,
+      correctOptionIds: q.correctOptionIds,
+      explanation: q.explanation,
+      studentAnswer: ans
+        ? {
+            selectedOptionIds: ans.selectedOptionIds,
+            isCorrect: ans.isCorrect,
+            scoreAwarded: ans.scoreAwarded,
+            timedOut: ans.timedOut,
+            startedAt: ans.startedAt,
+            submittedAt: ans.submittedAt,
+          }
+        : null,
+    };
+  });
+
+  return {
+    quizTitle: quiz.title,
+    quizId: quiz.id,
+    attemptId: attempt.id,
+    studentName: student?.name || "Participant",
+    studentTeam: student?.teamName || null,
+    studentEmail: student?.email || "",
+    collegeName: student?.collegeName || null,
+    rollNumber: student?.rollNumber || null,
+    totalScore: attempt.totalScore,
+    tabSwitchCount: attempt.tabSwitchCount,
+    status: attempt.status,
+    qualifiedForNextRound: attempt.qualifiedForNextRound,
+    startedAt: attempt.startedAt,
+    completedAt: attempt.completedAt,
+    isReadOnly,
+    questions: questionsReview,
   };
 }

@@ -10,6 +10,7 @@
     "test:ownership": "tsx --env-file=.env.local scripts/test-ownership.ts",
     "test:users": "tsx --env-file=.env.local scripts/test-user-management.ts",
     "test:engine": "tsx --env-file=.env.local scripts/test-participant-quiz.ts",
+    "test:live": "tsx --env-file=.env.local scripts/test-admin-live-enhancements.ts",
     "test:governance": "tsx --env-file=.env.local scripts/test-superadmin-governance.ts",
     "seed:superadmin": "node --env-file=.env.local scripts/seed-superadmin.mjs",
     "db:push": "drizzle-kit push",

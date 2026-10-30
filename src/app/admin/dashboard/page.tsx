@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth-guard";
 import db from "@/db";
 import { quizzes } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { getSharedLiveQuizzes } from "@/lib/quiz-service";
 
 export default async function AdminDashboardPage() {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"], "/login");
@@ -26,6 +27,7 @@ export default async function AdminDashboardPage() {
   }
 
   const userQuizzes = await quizQuery.orderBy(desc(quizzes.updatedAt)).limit(6);
+  const sharedLiveQuizzes = await getSharedLiveQuizzes(session);
 
   // Active quiz or latest quiz for active room indicator
   const activeQuiz = userQuizzes.find((q) => q.sessionStatus === "LIVE") || userQuizzes[0];
@@ -299,6 +301,91 @@ export default async function AdminDashboardPage() {
                           className="px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white rounded text-[11px] font-bold shadow-2xs"
                         >
                           Launch
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Section 4: Shared Live Quizzes (View-Only Monitoring) */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-base">👁️</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Shared Live Quizzes
+              </h2>
+              <span className="bg-sky-100 text-sky-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                View-Only
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              Live quizzes shared by other organizers for proctor monitoring
+            </span>
+          </div>
+
+          {sharedLiveQuizzes.length === 0 ? (
+            <div className="p-6 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/60">
+              <p className="text-xs text-slate-500 font-medium">
+                No shared live quizzes from other organizers are active right now.
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                When another Admin enables &ldquo;Share live quiz with other Admins&rdquo;, it will appear here for observation.
+              </p>
+            </div>
+          ) : (
+            <div className="border border-sky-200 rounded-xl overflow-hidden shadow-2xs bg-gradient-to-r from-sky-50/30 via-white to-slate-50/30">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-sky-50/80 text-slate-600 uppercase font-bold text-[10px] border-b border-sky-200">
+                    <th className="py-2.5 px-4">Quiz Title</th>
+                    <th className="py-2.5 px-4">Organizer</th>
+                    <th className="py-2.5 px-4">Room</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4">Scope</th>
+                    <th className="py-2.5 px-4 text-right">Observation Mode</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sharedLiveQuizzes.map((q) => (
+                    <tr key={q.id} className="hover:bg-sky-50/50 transition-colors">
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {q.title}
+                      </td>
+                      <td className="py-3 px-4 text-slate-700">
+                        <div className="font-semibold">{q.creatorName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{q.creatorEmail}</div>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-sky-700">
+                        {q.roomCode || "N/A"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                            q.sessionStatus === "LIVE"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : q.sessionStatus === "SCHEDULED"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {q.sessionStatus === "LIVE" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                          {q.sessionStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {q.totalQuestions} questions ({q.totalPoints} pts)
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <Link
+                          href={`/admin/quizzes/${q.id}/live`}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 rounded text-[11px] font-bold shadow-2xs hover:border-sky-400 transition-colors"
+                        >
+                          <span>👁️</span> Monitor Live (View-Only) →
                         </Link>
                       </td>
                     </tr>

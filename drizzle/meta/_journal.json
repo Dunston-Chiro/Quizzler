@@ -43,6 +43,13 @@
       "when": 1793223108261,
       "tag": "0005_cheerful_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793343318947,
+      "tag": "0006_silly_groot",
+      "breakpoints": true
     }
   ]
 }

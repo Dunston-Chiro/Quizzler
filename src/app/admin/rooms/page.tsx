@@ -14,6 +14,7 @@ export default async function AdminRoomsPage() {
       roomCode: quizzes.roomCode,
       sessionStatus: quizzes.sessionStatus,
       totalQuestions: quizzes.totalQuestions,
+      isSharedWithAdmins: quizzes.isSharedWithAdmins,
       updatedAt: quizzes.updatedAt,
     })
     .from(quizzes)
@@ -73,15 +74,22 @@ export default async function AdminRoomsPage() {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Room Access Code
                     </span>
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        quiz.sessionStatus === "LIVE"
-                          ? "bg-emerald-100 text-emerald-800 animate-pulse"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {quiz.sessionStatus === "LIVE" ? "ROOM LIVE" : "IDLE"}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {quiz.isSharedWithAdmins && (
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800" title="Visible to other Admins in read-only mode">
+                          Shared 👁️
+                        </span>
+                      )}
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          quiz.sessionStatus === "LIVE"
+                            ? "bg-emerald-100 text-emerald-800 animate-pulse"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {quiz.sessionStatus === "LIVE" ? "ROOM LIVE" : "IDLE"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center mb-3">

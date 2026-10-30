@@ -92,6 +92,7 @@ export const quizzes = pgTable(
     resultsReleased: boolean("results_released").default(false).notNull(),
     showLeaderboard: boolean("show_leaderboard").default(false).notNull(),
     showTabSwitchCount: boolean("show_tab_switch_count").default(false).notNull(),
+    isSharedWithAdmins: boolean("is_shared_with_admins").default(false).notNull(),
     defaultTimePerQuestionSec: integer("default_time_per_question_sec")
       .default(30)
       .notNull(),
