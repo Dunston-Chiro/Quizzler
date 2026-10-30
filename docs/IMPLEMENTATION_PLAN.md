@@ -105,21 +105,23 @@
   - `startQuizAttemptAction`, `submitAnswerAction`, `reportProctorViolationAction`, `joinQuizByRoomCodeAction`, `getActiveQuestionAction`.
 - [x] UI Components & Pages (Neobrutalism Design System):
   - Dashboard (`/participant/dashboard`): competition cards, Room Code quick join bar (`RoomCodeJoinBar.tsx`), Start/Resume/Scorecard buttons.
-  - Lobby (`/participant/quiz/[id]` & `QuizLobbyClient.tsx`): instructions, rules, timer details, Start button.
+  - Lobby (`/participant/quiz/[id]` & `QuizLobbyClient.tsx`): instructions, rules, timer details, Start button. Suppresses anti-cheat rule when `showTabSwitchCount = false`.
   - Timed Quiz Runner (`/participant/quiz/[id]/runner` & `TimedQuizRunnerClient.tsx`):
-    - Arena header with Room Code and Tab Lock status.
+    - Arena header with Room Code and Tab Lock status (`GUARD: TAB LOCK ON` pill shown only when enabled).
     - Synchronized countdown timer with red alert state (&le; 10s).
     - Question counter and Neobrutalist progress bar.
-    - Tab Violations counter (`⚠️ Tab Switches: X/3`).
+    - Dual-Mode Proctoring Telemetry:
+      - Silent Mode (default): header pill, telemetry subheader column, and warning popups/toasts are hidden (clean 2-column layout); events log silently to the database.
+      - Visible Mode: real-time Tab Violations counter (`⚠️ Tab Switches: X/3 Flag`), header guard badge, and warning popups appear.
     - Objective prompt, code snippet renderer, and options grid with Cyber Yellow locked state.
     - `🔒 PREVIOUS LOCKED [ONE-WAY PROGRESSION]` indicator.
     - Auto-advance on timeout and final submission completion.
   - Scorecard & Results (`/participant/quiz/[id]/results` & `QuizResultsClient.tsx`):
-    - Score banner, 4 stat cards (Total Score, Accuracy, Time Taken, Integrity Status).
+    - Score banner, dynamic stat cards (3 cards when `showTabSwitchCount = false`, 4 cards with Proctor Telemetry when `true`).
     - Blinded notice when results unreleased; question-by-question breakdown when released.
     - Top 10 Leaderboard with podium rankings when enabled.
-  - Admin Live Stage Integration:
-    - Added "Show Top 10 Leaderboard" toggle checkbox in `LiveStageClient.tsx` alongside results release.
+  - Admin Live Stage & Studio Integration:
+    - Added "Show Top 10 Leaderboard" and "Show Tab Switch Count" toggle controls in `LiveStageClient.tsx`, `QuestionStudioClient.tsx`, and `QuizManagerClient.tsx` backed by database migration `0005_cheerful_lizard.sql`.
 - [x] Automated Test Suite (`scripts/test-participant-quiz.ts`):
   - 13 comprehensive end-to-end tests covering joining, duplicate prevention, randomized question order, linear progression, server timing, timeout grading, disconnect recovery, telemetry, blinded scorecard, results release, Top 10 leaderboard, and cross-participant security (100% pass rate).
   - Added `"test:engine"` script to `package.json`.

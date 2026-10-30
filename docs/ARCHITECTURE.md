@@ -104,6 +104,7 @@ erDiagram
         quiz_session_status session_status
         boolean results_released
         boolean show_leaderboard
+        boolean show_tab_switch_count
         integer default_time_per_question_sec
         boolean shuffle_questions
         integer total_questions
@@ -221,7 +222,7 @@ sequenceDiagram
     Server->>Server: Sanitize payload (strip correct_option_ids & explanation)
     Server-->>Participant: Deliver question JSON with authoritative remaining seconds
 
-    Note over Participant: Client countdown bar ticks down. Tab switch / blur logs telemetry.
+    Note over Participant: Client countdown bar ticks down. Tab switch / blur logs telemetry (Silent or Visible based on show_tab_switch_count).
 
     alt Timely Submission (within timeLimit + 3s grace)
         Participant->>Server: submitAnswerAction(attemptId, questionId, selectedOptionIds)
@@ -236,6 +237,17 @@ sequenceDiagram
         Server-->>Participant: { success: true, timedOut: true }
     end
 ```
+
+#### 6.1 Dual-Mode Anti-Cheat Proctoring (`show_tab_switch_count`)
+- **Silent Mode (`show_tab_switch_count = false`, Default):**
+  - All browser `visibilitychange` and window `blur` events continue to be recorded non-blockingly to `proctoring_events` in PostgreSQL and increment `tab_switch_count` on the server.
+  - Visual feedback to the participant is completely suppressed: no `GUARD: TAB LOCK ON` header pill, no proctoring column in the runner subheader (gracefully collapses to a 2-column layout), no warning toasts/popups on blur/tab change, neutral footer notice, no anti-cheat rule in the quiz lobby, and no Proctor Telemetry card on the scorecard. The participant is unaware that monitoring is active.
+- **Visible Mode (`show_tab_switch_count = true`):**
+  - Displays the `GUARD: TAB LOCK ON` indicator pill in the runner header.
+  - Displays a real-time tab switch violation badge (`⚠️ Tab Switches: X / 3 Flag`) in the runner subheader.
+  - Triggers instant warning toast banners upon tab switch or focus loss.
+  - Shows lock-screen security warning in the runner footer.
+  - Displays the Anti-Cheat Shield protocol in the lobby and renders the Proctor Telemetry card on the post-quiz scorecard.
 
 ---
 
@@ -263,6 +275,8 @@ sequenceDiagram
    - Enabled when `quiz.show_leaderboard === true` or `quiz.results_released === true`.
    - Returns strictly the Top 10 participants sorted by `total_score DESC`, then duration `ASC`.
    - Exposes only public display metadata (`rank`, `teamName`, `userName`, `score`, `accuracyRate`, `durationSeconds`); participant email, database IDs, and sensitive tokens are completely hidden.
+4. **Proctor Telemetry Card Visibility:**
+   - On the participant results scorecard (`QuizResultsClient.tsx`), the Proctor Telemetry card (displaying tab violations) is displayed only when `quiz.show_tab_switch_count === true`. When disabled, the scorecard cleanly displays a 3-metric summary (`Questions Answered`, `Elapsed Time`, `Accuracy Rate`) to preserve participant-side monitoring privacy.
 
 ---
 

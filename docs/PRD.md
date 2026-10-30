@@ -133,14 +133,17 @@ The platform operates across three discrete roles:
 - **Refresh & Disconnect Recovery:**
   - Refreshing or reconnecting calls `getAuthoritativeCurrentQuestion`, which calculates remaining seconds based on `now - current_question_started_at`.
   - If the timer expired while disconnected, the server auto-advances the participant to the next question index.
-- **Anti-Cheat Proctoring Telemetry:**
+- **Anti-Cheat Proctoring Telemetry & Admin Visibility Control:**
   - Listens for browser `visibilitychange` (tab switches) and window `blur` (focus loss).
   - Transmits non-blocking telemetry to PostgreSQL `proctoring_events` and increments `tab_switch_count`.
-  - Real-time indicator (`⚠️ Tab Switches: X/3`) alerts the participant when suspicious events are detected.
+  - **Admin Toggle (`show_tab_switch_count`):** Admins can toggle participant awareness of proctoring on or off per quiz from the Live Stage / Question Studio.
+    - **When Disabled (`false`, Default):** Proctoring telemetry is captured completely silently. The `GUARD: TAB LOCK ON` pill, tab switch counter badge, and warning popups/toasts are hidden; the runner subheader gracefully renders a 2-column layout; the lobby rules and runner footer omit anti-cheat warnings; and the post-quiz scorecard hides the Proctor Telemetry metric card so the participant remains unaware they were monitored.
+    - **When Enabled (`true`):** Real-time indicator (`⚠️ Tab Switches: X/3 Flag`), header guard pill, instant warning toasts, and scorecard telemetry cards are rendered.
   - Zero camera recording or invasive device permissions required.
 - **Results & Leaderboard Visibility (`/participant/quiz/[id]/results`):**
   - **Blinded Scorecard:** If `results_released = false`, score details, master keys, and answer explanations are blinded to prevent leaks while other participants finish.
   - **Released Scorecard:** If `results_released = true`, reveals total score, rank, time taken, accuracy percentage, and a full question-by-question review with explanations.
+  - **Proctor Telemetry Card:** Tab violation telemetry on the scorecard is shown only if `show_tab_switch_count = true` (3 clean summary cards displayed when disabled, 4 cards when enabled).
   - **Top 10 Leaderboard:** When enabled by admin (`show_leaderboard = true` or `results_released = true`), displays a live podium and Top 10 team ranking without revealing private participant data.
 
 ---
