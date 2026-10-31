@@ -105,10 +105,19 @@ The platform operates across three discrete roles:
 - **Top Navigation:** Launch (`/admin/dashboard`), Quizzes (`/admin/quizzes`), Rooms (`/admin/rooms`), Reports (`/admin/reports`), and Results & Live Stage (`/admin/live`).
 - **Room Code Indicator:** Prominent room pill (e.g. `STG2-BIM`) with 1-click clipboard copying.
 - **Live Proctoring Stage (`/admin/quizzes/[id]/live`):**
-  - Session status banner (`LIVE`, `SCHEDULED`, `ENDED`) with instant control toggles (Score Visibility, Open Registration, Anti-Cheat Enforcement).
+  - Session status banner (`LIVE`, `SCHEDULED`, `ENDED`) with instant control toggles (Score Visibility, Open Registration, Anti-Cheat Enforcement, Share live quiz with other Admins).
   - 4 Key Metric Cards: Total Registered, Active Responses, Average Accuracy (%), Flagged Integrity Events.
-  - Live Participant Roster: Live status badges, answer progress, total score, tab switch count, and 1-click Round 2 qualification toggle.
-  - Quick Question Injector: Rapidly inject Multiple Choice, True/False, or Short Answer prompts into active sessions.
+  - **Relocated Quick Question Injector:** Positioned immediately above the Live Participants table for seamless contextual workflow.
+  - **Complete Question Progress Display:** Renders progress indicators for all questions in the deck (not capped at 5) with horizontal scrolling for large question sets.
+  - **Student Answer Review Modal:** 1-click review modal displaying student submissions, correct answers, scoring, and Round 2 qualification toggle.
+  - **4-Way Table Sorting:** Live sorting across Name (alphabetical), Score (numeric descending/ascending), Time (elapsed duration), and Tab-Switch Count.
+- **Admin-to-Admin Quiz Sharing (`is_shared_with_admins`):**
+  - Organizers can share live and draft quizzes with other authenticated administrators.
+  - **Quizzes Studio (`/admin/quizzes`):** Shared quizzes appear alongside owned quizzes with organizer attribution (`Created by {name}`), a `Shared` badge, and quick filter pills (`MY QUIZZES`, `SHARED WITH ME`).
+  - **Question Studio (`/admin/quizzes/[id]`):** Observer Admins can inspect all questions, points, timers, and explanations in view-only mode with add, edit, delete, and settings modifications strictly disabled.
+  - **Competition Rooms (`/admin/rooms`) & Reports (`/admin/reports`):** Shared rooms and reports are visible to observer admins with organizer attribution.
+  - **Live Stage Observer Clearance:** Observer Admins can enter active rooms to inspect telemetry in real time; the Quick Question Injector, review modal, candidate qualification, cadence selectors, "Show Student Names", "Show Answers", and stage toggles are disabled.
+  - **Live Stage Fallback (`/admin/live`):** Automatically selects the most active owned or shared quiz, avoiding room code insertion collisions.
 
 #### 3.5 Participant Experience (Neobrutalism Design)
 - **Design Language:** High-contrast Neobrutalism with 3-4px bold black borders, hard offset drop shadows (`shadow-[4px_4px_0px_#000]`), and high-energy cyber accents (Cyber Yellow `#FFE600`, Cyan `#00F0FF`, Neo-Pink `#FF90E8`).

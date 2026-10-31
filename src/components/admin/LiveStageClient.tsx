@@ -425,6 +425,7 @@ export default function LiveStageClient({
 
   // Student Answer Review Modal Handlers
   const handleOpenReview = async (attemptId: string) => {
+    if (isReadOnly) return;
     setSelectedAttemptId(attemptId);
     setReviewLoading(true);
     setReviewError(null);
@@ -573,22 +574,34 @@ export default function LiveStageClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+          <label
+            className={`flex items-center gap-2 text-slate-700 font-medium ${
+              isReadOnly ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+            }`}
+            title={isReadOnly ? "Disabled in view-only monitoring mode" : undefined}
+          >
             <input
               type="checkbox"
               checked={showStudentNames}
-              onChange={(e) => setShowStudentNames(e.target.checked)}
-              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+              onChange={(e) => !isReadOnly && setShowStudentNames(e.target.checked)}
+              disabled={isReadOnly}
+              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 disabled:opacity-50"
             />
             <span>Show Student Names</span>
           </label>
 
-          <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+          <label
+            className={`flex items-center gap-2 text-slate-700 font-medium ${
+              isReadOnly ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+            }`}
+            title={isReadOnly ? "Disabled in view-only monitoring mode" : undefined}
+          >
             <input
               type="checkbox"
               checked={showAnswers}
-              onChange={(e) => setShowAnswers(e.target.checked)}
-              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+              onChange={(e) => !isReadOnly && setShowAnswers(e.target.checked)}
+              disabled={isReadOnly}
+              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 disabled:opacity-50"
             />
             <span>Show Answers</span>
           </label>
@@ -1215,9 +1228,14 @@ export default function LiveStageClient({
                               </span>
                             )}
                             <button
-                              onClick={() => handleOpenReview(att.id)}
-                              className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer shadow-2xs hover:text-slate-900"
-                              title="Review student submitted answers"
+                              onClick={() => !isReadOnly && handleOpenReview(att.id)}
+                              disabled={isReadOnly}
+                              className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all shadow-2xs ${
+                                isReadOnly
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300 cursor-pointer hover:text-slate-900"
+                              }`}
+                              title={isReadOnly ? "Review is disabled for non-organizer observers" : "Review student submitted answers"}
                             >
                               Review
                             </button>

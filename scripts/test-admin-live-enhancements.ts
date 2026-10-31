@@ -19,6 +19,8 @@ import {
   createQuiz,
   createQuestion,
   updateQuizStatus,
+  getAdminQuizzes,
+  getQuizWithQuestions,
   getLiveStageTelemetry,
   getSharedLiveQuizzes,
   toggleQuizSharing,
@@ -369,6 +371,14 @@ async function runTests() {
     console.log("\n8b. Admin Alpha enables sharing...");
     await toggleQuizSharing(quiz.id, true, sessionAlpha);
 
+    // Verify visibility in getAdminQuizzes for Admin Beta
+    const adminQuizzesBeta = await getAdminQuizzes(sessionBeta);
+    const sharedInList = adminQuizzesBeta.find((q) => q.id === quiz.id);
+    if (!sharedInList) {
+      throw new Error("FAIL: Quiz did not appear in getAdminQuizzes for Admin Beta after sharing was enabled!");
+    }
+    console.log(`✓ Quiz "${sharedInList.title}" visible in Admin Beta Quizzes list (Created by: ${sharedInList.creatorName})`);
+
     const sharedQuizzesAfter = await getSharedLiveQuizzes(sessionBeta);
     const sharedEntry = sharedQuizzesAfter.find((q) => q.id === quiz.id);
     if (!sharedEntry) {
@@ -377,8 +387,20 @@ async function runTests() {
     console.log(`✓ Quiz "${sharedEntry.title}" now visible to Admin Beta in Shared Live Quizzes!`);
     console.log(`  - Organizer: ${sharedEntry.creatorName} (${sharedEntry.creatorEmail})`);
 
-    // Admin Beta observes shared quiz
-    console.log("\n8c. Admin Beta accesses shared quiz live telemetry...");
+    // Verify view-only access to Question Studio (getQuizWithQuestions)
+    console.log("\n8c. Admin Beta opens Question Studio for shared quiz in view-only mode...");
+    const studioData = await getQuizWithQuestions(quiz.id, sessionBeta);
+    if (!studioData) throw new Error("FAIL: Admin Beta could not view shared quiz questions!");
+    if (studioData.isReadOnly !== true) {
+      throw new Error("SECURITY VIOLATION: Non-owner was not flagged as isReadOnly in Question Studio!");
+    }
+    if (studioData.questions.length !== 8) {
+      throw new Error(`FAIL: Expected 8 questions in studio view, got ${studioData.questions.length}`);
+    }
+    console.log(`✓ Question Studio accessible to Admin Beta (isReadOnly: true, Questions: ${studioData.questions.length})`);
+
+    // Admin Beta observes shared quiz live telemetry
+    console.log("\n8d. Admin Beta accesses shared quiz live telemetry...");
     const betaTelemetry = await getLiveStageTelemetry(quiz.id, sessionBeta);
     if (!betaTelemetry) throw new Error("FAIL: Admin Beta failed to fetch shared quiz telemetry.");
 
@@ -395,7 +417,7 @@ async function runTests() {
     }
 
     // Verify Admin Beta cannot perform mutations (View-only enforcement)
-    console.log("\n8d. Verifying strict view-only permissions (mutations blocked for non-owner)...");
+    console.log("\n8e. Verifying strict view-only permissions (mutations blocked for non-owner)...");
     let mutationBlocked = false;
     try {
       await toggleAttemptQualification(p1Attempt.attemptId, true, sessionBeta);
@@ -414,8 +436,25 @@ async function runTests() {
     }
     if (!statusChangeBlocked) throw new Error("SECURITY VIOLATION: Non-owner Admin Beta was allowed to change quiz status!");
 
+    let questionAddBlocked = false;
+    try {
+      await createQuestion(
+        quiz.id,
+        {
+          questionText: "Unauthorized Injected Question",
+          options: [{ id: "opt1", text: "A" }],
+          correctOptionIds: ["opt1"],
+        },
+        sessionBeta
+      );
+    } catch (err: unknown) {
+      questionAddBlocked = true;
+      console.log(`✓ Question addition by non-owner properly blocked: "${(err as Error).message}"`);
+    }
+    if (!questionAddBlocked) throw new Error("SECURITY VIOLATION: Non-owner Admin Beta was allowed to add a question!");
+
     // Super-Admin access retains full permissions
-    console.log("\n8e. Verifying Super-Admin preserves global write clearance...");
+    console.log("\n8f. Verifying Super-Admin preserves global write clearance...");
     const superTelemetry = await getLiveStageTelemetry(quiz.id, sessionSuper);
     if (superTelemetry?.quiz.isReadOnly !== false) {
       throw new Error("FAIL: Super-Admin was given read-only mode instead of full clearance!");
@@ -423,7 +462,7 @@ async function runTests() {
     console.log(`✓ Super-Admin access confirmed: isReadOnly = false (Global clearance active).`);
 
     // Disable sharing again
-    console.log("\n8f. Admin Alpha disables sharing...");
+    console.log("\n8g. Admin Alpha disables sharing...");
     await toggleQuizSharing(quiz.id, false, sessionAlpha);
 
     let betaBlockedAgain = false;
@@ -431,9 +470,18 @@ async function runTests() {
       await getLiveStageTelemetry(quiz.id, sessionBeta);
     } catch (err: unknown) {
       betaBlockedAgain = true;
-      console.log(`✓ Access immediately revoked when sharing disabled: "${(err as Error).message}"`);
+      console.log(`✓ Live Stage telemetry access immediately revoked when sharing disabled: "${(err as Error).message}"`);
     }
-    if (!betaBlockedAgain) throw new Error("SECURITY VIOLATION: Admin Beta was able to access quiz after sharing disabled!");
+    if (!betaBlockedAgain) throw new Error("SECURITY VIOLATION: Admin Beta was able to access live telemetry after sharing disabled!");
+
+    let betaStudioBlockedAgain = false;
+    try {
+      await getQuizWithQuestions(quiz.id, sessionBeta);
+    } catch (err: unknown) {
+      betaStudioBlockedAgain = true;
+      console.log(`✓ Question Studio access immediately revoked when sharing disabled: "${(err as Error).message}"`);
+    }
+    if (!betaStudioBlockedAgain) throw new Error("SECURITY VIOLATION: Admin Beta was able to access Question Studio after sharing disabled!");
 
     // -------------------------------------------------------------------------
     // Cleanup

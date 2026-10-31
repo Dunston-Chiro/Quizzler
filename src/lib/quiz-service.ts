@@ -1,4 +1,4 @@
-import { eq, and, ne, sql, desc, asc } from "drizzle-orm";
+import { eq, and, or, ne, sql, desc, asc } from "drizzle-orm";
 import db from "@/db";
 import {
   quizzes,
@@ -74,7 +74,7 @@ export function assertOwnership(
 }
 
 /**
- * 1. Get Quizzes for Admin (Owned only, or all for Super-Admin)
+ * 1. Get Quizzes for Admin (Owned quizzes + Quizzes shared by other admins, or all for Super-Admin)
  */
 export async function getAdminQuizzes(session: SessionPayload) {
   assertAdminRole(session);
@@ -104,10 +104,15 @@ export async function getAdminQuizzes(session: SessionPayload) {
     .$dynamic();
 
   if (session.role !== "SUPER_ADMIN") {
-    query = query.where(eq(quizzes.createdBy, session.userId));
+    query = query.where(
+      or(
+        eq(quizzes.createdBy, session.userId),
+        eq(quizzes.isSharedWithAdmins, true)
+      )
+    );
   }
 
-  return await query.orderBy(desc(quizzes.createdAt));
+  return await query.orderBy(desc(quizzes.updatedAt));
 }
 
 /**
@@ -148,7 +153,7 @@ export async function getSharedLiveQuizzes(session: SessionPayload) {
 }
 
 /**
- * 2. Get Single Quiz with Questions (Restricted to owner or super-admin)
+ * 2. Get Single Quiz with Questions (Owner has full access; other Admins have read-only access if shared)
  */
 export async function getQuizWithQuestions(
   quizId: string,
@@ -157,8 +162,30 @@ export async function getQuizWithQuestions(
   assertAdminRole(session);
 
   const [quiz] = await db
-    .select()
+    .select({
+      id: quizzes.id,
+      title: quizzes.title,
+      description: quizzes.description,
+      roomCode: quizzes.roomCode,
+      createdBy: quizzes.createdBy,
+      creatorName: users.name,
+      creatorEmail: users.email,
+      sessionStatus: quizzes.sessionStatus,
+      resultsReleased: quizzes.resultsReleased,
+      showLeaderboard: quizzes.showLeaderboard,
+      showTabSwitchCount: quizzes.showTabSwitchCount,
+      isSharedWithAdmins: quizzes.isSharedWithAdmins,
+      defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
+      shuffleQuestions: quizzes.shuffleQuestions,
+      totalQuestions: quizzes.totalQuestions,
+      totalPoints: quizzes.totalPoints,
+      scheduledStartTime: quizzes.scheduledStartTime,
+      scheduledEndTime: quizzes.scheduledEndTime,
+      createdAt: quizzes.createdAt,
+      updatedAt: quizzes.updatedAt,
+    })
     .from(quizzes)
+    .innerJoin(users, eq(quizzes.createdBy, users.id))
     .where(eq(quizzes.id, quizId))
     .limit(1);
 
@@ -166,8 +193,16 @@ export async function getQuizWithQuestions(
     return null;
   }
 
-  // Strict ownership check
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  const isOwner = quiz.createdBy === session.userId;
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
+  const isShared = Boolean(quiz.isSharedWithAdmins);
+
+  // If not owner, not super-admin, and not shared with admins, strictly deny access
+  if (!isOwner && !isSuperAdmin && !isShared) {
+    assertOwnership(quiz.createdBy, session, "Quiz");
+  }
+
+  const isReadOnly = !isOwner && !isSuperAdmin;
 
   // Fetch questions
   const quizQuestions = await db
@@ -176,7 +211,7 @@ export async function getQuizWithQuestions(
     .where(eq(questions.quizId, quizId))
     .orderBy(asc(questions.orderIndex));
 
-  return { quiz, questions: quizQuestions };
+  return { quiz, questions: quizQuestions, isReadOnly };
 }
 
 /**

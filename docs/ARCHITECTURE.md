@@ -299,3 +299,29 @@ sequenceDiagram
 5. **Inactive Operational CLI:**
    - Embedded bottom terminal panel (`root@quizzler:~$`) is visually modeled after modern Dev-Ops consoles.
    - Command interpreter is strictly disabled; inputs are read-only with zero backend execution endpoints.
+
+---
+
+### 10. Multi-Admin Shared Live Quiz & Cross-Admin Observation Architecture
+
+1. **Schema & Sharing State (`is_shared_with_admins`):**
+   - Stored on the `quizzes` table as `is_shared_with_admins BOOLEAN NOT NULL DEFAULT FALSE`.
+   - Organizers can toggle sharing on/off at any time from the Live Stage controls or Quiz Settings modal.
+   - When enabled, other authenticated administrators (`role: ADMIN`) receive read-only observation clearance for that competition quiz and room.
+
+2. **Cross-Tab Visibility & Navigation:**
+   - **Launchpad / Dashboard (`/admin/dashboard`):** Features a dedicated "Shared Live Quizzes" section listing active sessions hosted by other organizers with quick access to observation mode. Fallback active room indicator cleanly reflects shared rooms when an admin has no owned quizzes.
+   - **Quiz Management Studio (`/admin/quizzes`):** Queries owned quizzes and shared quizzes (`createdBy = session.userId OR isSharedWithAdmins = true`). Shared quizzes display a distinct `👁️ Shared` pill, organizer attribution (`Created by {creatorName}`), and a "View Questions (View-Only)" action. Quick filter pills (`ALL`, `MY QUIZZES`, `SHARED WITH ME`, `LIVE`, `SCHEDULED`, `DRAFT`, `ENDED`) allow immediate segmentation.
+   - **Question Studio (`/admin/quizzes/[id]`):** `getQuizWithQuestions` permits non-owner admin read-access when `isSharedWithAdmins === true`, returning `isReadOnly: true`. A prominent view-only banner is displayed at the top. Adding, editing, deleting, reordering questions, and altering quiz settings are hidden and strictly rejected server-side.
+   - **Active Rooms (`/admin/rooms`):** Displays shared room access codes with organizer attribution and room live/idle badges alongside owned rooms.
+   - **Performance Reports & Results (`/admin/reports`):** Lists scoring reports, participant counts, and average performance metrics for both owned and shared quizzes.
+   - **Live Stage Fallback (`/admin/live`):** Automatically routes to the highest-priority active live quiz (prioritizing owned live quizzes first, then shared live quizzes, then recent sessions). Eliminates room code insertion collisions (`STG2-BIM` unique constraint) by presenting a friendly empty state if no eligible quizzes exist.
+
+3. **Live Stage Real-Time Observer Clearance (`/admin/quizzes/[id]/live`):**
+   - Telemetry response assigns `isReadOnly: true` and includes `ownerName`.
+   - Displays a persistent top banner: `👁️ VIEW-ONLY MONITORING MODE: Owned by {ownerName}`.
+   - **Quick Question Injector:** Entirely hidden and inaccessible to observer admins.
+   - **Student Answer Review:** Review action buttons in the live participants table are disabled (`cursor-not-allowed`, opacity reduction, and descriptive tooltip). Server-side `getStudentAttemptReview` strictly enforces `assertOwnership`.
+   - **Candidate Selection / Round 2 Gate:** Selection buttons are disabled in observer mode; mutations are strictly blocked server-side by `toggleAttemptQualification`.
+   - **Stage Controls & Visibility Toggles:** Session lifecycle controls (Live/Draft/Ended), Question Cadence selectors, "Show Student Names", "Show Answers", leaderboard visibility, proctoring blur display, and sharing toggles are all disabled for observers (`disabled={isReadOnly}`).
+

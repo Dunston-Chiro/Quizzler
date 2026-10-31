@@ -47,11 +47,15 @@ interface QuestionStudioClientProps {
   initialQuestions: QuestionItem[];
   currentUserId: string;
   currentUserRole?: string;
+  isReadOnly?: boolean;
+  ownerName?: string;
 }
 
 export default function QuestionStudioClient({
   quiz: initialQuiz,
   initialQuestions,
+  isReadOnly = false,
+  ownerName,
 }: QuestionStudioClientProps) {
   const router = useRouter();
   const [quiz, setQuiz] = useState<QuizItem>(initialQuiz);
@@ -111,11 +115,13 @@ export default function QuestionStudioClient({
   };
 
   const handleOpenAdd = () => {
+    if (isReadOnly) return;
     resetQuestionForm();
     setIsEditorOpen(true);
   };
 
   const handleOpenEdit = (q: QuestionItem) => {
+    if (isReadOnly) return;
     setEditingQuestionId(q.id);
     setFormPrompt(q.questionText);
     setFormType(q.questionType);
@@ -191,6 +197,7 @@ export default function QuestionStudioClient({
   // Submit Question Form
   const handleSubmitQuestion = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!formPrompt.trim()) {
       setErrorMsg("Please enter question prompt.");
       return;
@@ -254,6 +261,7 @@ export default function QuestionStudioClient({
 
   // Delete Question
   const handleDeleteQuestion = (questionId: string) => {
+    if (isReadOnly) return;
     if (!window.confirm("Are you sure you want to delete this question?")) return;
 
     startTransition(async () => {
@@ -273,6 +281,7 @@ export default function QuestionStudioClient({
 
   // Move Question Order
   const handleMove = (index: number, direction: "up" | "down") => {
+    if (isReadOnly) return;
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= questions.length) return;
 
@@ -297,6 +306,7 @@ export default function QuestionStudioClient({
   // Update Quiz Settings
   const handleSaveQuizSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     startTransition(async () => {
       const res = await updateQuizAction(quiz.id, {
         title: editTitle.trim(),
@@ -327,6 +337,22 @@ export default function QuestionStudioClient({
 
   return (
     <div className="flex flex-col flex-1 bg-white">
+      {/* 0. View-Only Observation Banner (For shared quizzes) */}
+      {isReadOnly && (
+        <div className="bg-sky-50 border-b border-sky-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-sky-900">
+          <div className="flex items-center gap-2">
+            <span className="text-base">👁️</span>
+            <span className="font-bold">VIEW-ONLY STUDIO:</span>
+            <span>
+              This quiz is owned by <strong>{ownerName || "another organizer"}</strong>. Question viewing is allowed, but adding, editing, reordering, and settings modifications are disabled.
+            </span>
+          </div>
+          <span className="bg-sky-200/80 text-sky-900 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
+            View-Only Observer
+          </span>
+        </div>
+      )}
+
       {/* Studio Header Bar */}
       <div className="border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -344,16 +370,18 @@ export default function QuestionStudioClient({
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                 {quiz.title}
               </h1>
-              <button
-                onClick={() => setShowSettingsModal(true)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
-                title="Edit Quiz Settings"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                  title="Edit Quiz Settings"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
               {quiz.description || "No description provided."}
@@ -368,15 +396,17 @@ export default function QuestionStudioClient({
             <span className="text-sky-700">{quiz.roomCode}</span>
           </div>
 
-          <button
-            onClick={handleOpenAdd}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Question
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={handleOpenAdd}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-semibold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Question
+            </button>
+          )}
 
           <Link
             href={`/admin/quizzes/${quiz.id}/live`}
@@ -386,7 +416,7 @@ export default function QuestionStudioClient({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Launch Live Stage
+            {isReadOnly ? "Observe Live Stage" : "Launch Live Stage"}
           </Link>
         </div>
       </div>
@@ -424,14 +454,22 @@ export default function QuestionStudioClient({
             </div>
             <h3 className="text-sm font-bold text-slate-800 mb-1">No questions yet</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Add your first question to this quiz with custom timer, options, and points.
+              {isReadOnly
+                ? "The organizer has not added questions to this quiz yet."
+                : "Add your first question to this quiz with custom timer, options, and points."}
             </p>
-            <button
-              onClick={handleOpenAdd}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
-            >
-              + Add First Question
-            </button>
+            {!isReadOnly ? (
+              <button
+                onClick={handleOpenAdd}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+              >
+                + Add First Question
+              </button>
+            ) : (
+              <span className="text-xs text-slate-400 italic">
+                Observation clearance only
+              </span>
+            )}
           </div>
         ) : (
           <div className="space-y-4 max-w-4xl mx-auto">
@@ -455,43 +493,49 @@ export default function QuestionStudioClient({
                   </div>
 
                   {/* Ordering & Action Controls */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleMove(idx, "up")}
-                      disabled={idx === 0}
-                      title="Move Up"
-                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 cursor-pointer"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => handleMove(idx, "down")}
-                      disabled={idx === questions.length - 1}
-                      title="Move Down"
-                      className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 cursor-pointer"
-                    >
-                      ▼
-                    </button>
-                    <div className="h-3 w-px bg-slate-200 mx-1" />
-                    <button
-                      onClick={() => handleOpenEdit(q)}
-                      className="p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
-                      title="Edit Question"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteQuestion(q.id)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
-                      title="Delete Question"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
+                  {!isReadOnly ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleMove(idx, "up")}
+                        disabled={idx === 0}
+                        title="Move Up"
+                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 cursor-pointer"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => handleMove(idx, "down")}
+                        disabled={idx === questions.length - 1}
+                        title="Move Down"
+                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 cursor-pointer"
+                      >
+                        ▼
+                      </button>
+                      <div className="h-3 w-px bg-slate-200 mx-1" />
+                      <button
+                        onClick={() => handleOpenEdit(q)}
+                        className="p-1 text-slate-400 hover:text-sky-600 rounded cursor-pointer"
+                        title="Edit Question"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuestion(q.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                        title="Delete Question"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-semibold px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                      View Only
+                    </span>
+                  )}
                 </div>
 
                 {/* Prompt */}

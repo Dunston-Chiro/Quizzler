@@ -54,13 +54,21 @@ export default function QuizManagerClient({
 
   // Filter quizzes
   const filteredQuizzes = quizzes.filter((quiz) => {
+    const isOwner = quiz.createdBy === currentUserId || currentUserRole === "SUPER_ADMIN";
     const matchesSearch =
       quiz.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (quiz.roomCode && quiz.roomCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (quiz.description && quiz.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      (quiz.description && quiz.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (quiz.creatorName && quiz.creatorName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus =
-      statusFilter === "ALL" || quiz.sessionStatus === statusFilter;
+    let matchesStatus = true;
+    if (statusFilter === "MY QUIZZES") {
+      matchesStatus = isOwner;
+    } else if (statusFilter === "SHARED WITH ME") {
+      matchesStatus = !isOwner && Boolean(quiz.isSharedWithAdmins);
+    } else if (statusFilter !== "ALL") {
+      matchesStatus = quiz.sessionStatus === statusFilter;
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -195,7 +203,7 @@ export default function QuizManagerClient({
 
         {/* Status Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-          {["ALL", "LIVE", "SCHEDULED", "DRAFT", "ENDED"].map((st) => (
+          {["ALL", "MY QUIZZES", "SHARED WITH ME", "LIVE", "SCHEDULED", "DRAFT", "ENDED"].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
@@ -250,7 +258,14 @@ export default function QuizManagerClient({
                         <span>ROOM:</span>
                         <span className="text-sky-700">{quiz.roomCode || "N/A"}</span>
                       </div>
-                      {getStatusBadge(quiz.sessionStatus)}
+                      <div className="flex items-center gap-1.5">
+                        {!isOwner && quiz.isSharedWithAdmins && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300" title="Shared by another organizer in view-only mode">
+                            👁️ Shared
+                          </span>
+                        )}
+                        {getStatusBadge(quiz.sessionStatus)}
+                      </div>
                     </div>
 
                     {/* Title & Description */}
@@ -277,8 +292,17 @@ export default function QuizManagerClient({
                       </div>
                     </div>
 
+                    {/* Author attribution for shared quizzes */}
+                    {!isOwner && (
+                      <div className="text-[11px] text-slate-500 mb-3 truncate flex items-center gap-1">
+                        <span className="font-semibold text-slate-600">Created by:</span>
+                        <span className="font-bold text-slate-800">{quiz.creatorName}</span>
+                        <span className="text-slate-400 font-mono">({quiz.creatorEmail})</span>
+                      </div>
+                    )}
+
                     {/* Author attribution for super-admins */}
-                    {currentUserRole === "SUPER_ADMIN" && (
+                    {currentUserRole === "SUPER_ADMIN" && isOwner && (
                       <div className="text-[11px] text-slate-400 mb-3 truncate">
                         Owner: <span className="font-medium text-slate-600">{quiz.creatorName}</span> ({quiz.creatorEmail})
                       </div>
@@ -294,7 +318,7 @@ export default function QuizManagerClient({
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
-                      Question Studio
+                      {isOwner ? "Question Studio" : "View Questions (View-Only)"}
                     </Link>
 
                     <div className="flex items-center gap-1.5">
@@ -313,13 +337,17 @@ export default function QuizManagerClient({
 
                       <Link
                         href={`/admin/quizzes/${quiz.id}/live`}
-                        className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5"
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 ${
+                          isOwner
+                            ? "bg-sky-500 hover:bg-sky-600 text-white"
+                            : "bg-slate-900 hover:bg-slate-800 text-white"
+                        }`}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Launch Live Stage
+                        {isOwner ? "Launch Live Stage" : "Observe Live Stage"}
                       </Link>
                     </div>
                   </div>

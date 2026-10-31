@@ -174,3 +174,28 @@
   - Simulates 100 simultaneous participants fetching questions, submitting answers, and sending proctoring events.
   - Monitors Neon PgBouncer connection reuse and query latency.
   - Verifies database execution remains sub-20ms under peak load.
+
+---
+
+### Phase 9: Admin Live Dashboard Enhancements & Multi-Admin Shared Views (Completed)
+- [x] Relocate Quick Question Injector:
+  - Repositioned immediately above the Live Participants table for seamless contextual workflow.
+  - Responsive collapsible card preserving all deck injection capabilities.
+- [x] Complete Question Progress Display:
+  - Expanded participant progress indicators from a 5-question cap to render all questions in the quiz.
+  - Responsive horizontal scrolling wrapper maintaining fixed sticky participant columns.
+- [x] Student Answer Review Modal:
+  - Modal displaying selected student's submitted answers, correct keys, awarded scores, and question status.
+  - Integrated Round 2 qualification / shortlisting toggle with server-side authorization enforcement.
+- [x] 4-Way Live Participants Table Sorting:
+  - Full client-side & server-backed sorting by Name (alphabetical), Score (numeric descending/ascending), Time (elapsed duration), and Tab-Switch Count.
+- [x] Cross-Admin Quiz View Sharing & Observer Clearance:
+  - Added `is_shared_with_admins` boolean column to `quizzes` via migration `0006_silly_groot.sql`.
+  - Quizzes Studio (`/admin/quizzes`): Exposes shared quizzes with `👁️ Shared` pill, organizer attribution, and filter pills (`ALL`, `MY QUIZZES`, `SHARED WITH ME`).
+  - Question Studio (`/admin/quizzes/[id]`): Granted view-only inspection access to other admins with question editing, adding, reordering, and settings modifications strictly disabled.
+  - Competition Rooms (`/admin/rooms`) & Reports (`/admin/reports`): Exposes shared rooms and scoring reports with organizer attribution.
+  - Live Stage Observer Clearance (`/admin/quizzes/[id]/live`): Non-owner admins enter in observer mode; Quick Question Injector, review modal, candidate qualification, "Show Student Names", "Show Answers", and stage controls are disabled.
+  - Live Stage Fallback Bugfix (`/admin/live`): Prioritizes owned live quizzes, then shared live quizzes, then recent sessions. Fixed room code insertion collision (`STG2-BIM` unique constraint) by presenting an empty state if no eligible quizzes exist.
+- [x] Automated Test Suite (`scripts/test-admin-live-enhancements.ts`):
+  - 8-test verification suite covering question injection, full progress rendering, review modal, qualification toggle, 4-way sorting, cross-admin visibility, view-only enforcement, superadmin global clearance, and revocation on unsharing.
+  - Added `"test:live"` script to `package.json`.

@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth-guard";
 import AdminHeader from "@/components/admin/AdminHeader";
 import db from "@/db";
 import { quizzes } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or } from "drizzle-orm";
 
 export default async function AdminLayout({
   children,
@@ -12,10 +12,21 @@ export default async function AdminLayout({
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"], "/login");
 
   // Fetch the latest or currently live quiz for room code indicator
-  const [activeQuiz] = await db
+  let roomQuery = db
     .select({ roomCode: quizzes.roomCode })
     .from(quizzes)
-    .where(eq(quizzes.createdBy, session.userId))
+    .$dynamic();
+
+  if (session.role !== "SUPER_ADMIN") {
+    roomQuery = roomQuery.where(
+      or(
+        eq(quizzes.createdBy, session.userId),
+        eq(quizzes.isSharedWithAdmins, true)
+      )
+    );
+  }
+
+  const [activeQuiz] = await roomQuery
     .orderBy(desc(quizzes.updatedAt))
     .limit(1);
 

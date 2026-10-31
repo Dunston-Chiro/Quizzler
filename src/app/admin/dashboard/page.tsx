@@ -29,8 +29,12 @@ export default async function AdminDashboardPage() {
   const userQuizzes = await quizQuery.orderBy(desc(quizzes.updatedAt)).limit(6);
   const sharedLiveQuizzes = await getSharedLiveQuizzes(session);
 
-  // Active quiz or latest quiz for active room indicator
-  const activeQuiz = userQuizzes.find((q) => q.sessionStatus === "LIVE") || userQuizzes[0];
+  // Active quiz or latest quiz for active room indicator (owned or shared)
+  const activeQuiz =
+    userQuizzes.find((q) => q.sessionStatus === "LIVE") ||
+    userQuizzes[0] ||
+    sharedLiveQuizzes.find((q) => q.sessionStatus === "LIVE") ||
+    sharedLiveQuizzes[0];
   const activeRoomCode = activeQuiz?.roomCode || "STG2-BIM";
 
   return (

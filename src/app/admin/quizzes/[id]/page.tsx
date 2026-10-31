@@ -23,7 +23,7 @@ export default async function AdminQuizDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const { quiz, questions } = result;
+  const { quiz, questions, isReadOnly } = result;
 
   return (
     <QuestionStudioClient
@@ -37,6 +37,7 @@ export default async function AdminQuizDetailPage({ params }: PageProps) {
         defaultTimePerQuestionSec: quiz.defaultTimePerQuestionSec,
         totalQuestions: quiz.totalQuestions,
         totalPoints: quiz.totalPoints,
+        isSharedWithAdmins: quiz.isSharedWithAdmins ?? false,
       }}
       initialQuestions={questions.map((q) => ({
         id: q.id,
@@ -55,6 +56,8 @@ export default async function AdminQuizDetailPage({ params }: PageProps) {
       }))}
       currentUserId={session.userId}
       currentUserRole={session.role}
+      isReadOnly={Boolean(isReadOnly)}
+      ownerName={quiz.creatorName || undefined}
     />
   );
 }
