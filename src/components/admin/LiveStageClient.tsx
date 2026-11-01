@@ -163,11 +163,37 @@ export default function LiveStageClient({
 
   // Pure timer state for live duration calculations
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
-  // Poll live telemetry every 4 seconds
+  // Manual refresh helper
+  const refetchTelemetry = async () => {
+    try {
+      setIsManualSyncing(true);
+      const res = await fetch(`/api/admin/quizzes/${quizId}/live`);
+      if (res.ok) {
+        const freshData = await res.json();
+        setData(freshData);
+      }
+    } catch {
+      // network error ignored gracefully
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
+
+  // 1. Lightweight local clock tick for participant active time display (no network calls)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 2. Poll live telemetry once per minute (60,000ms) to avoid serverless timeouts & DB connection exhaustion
   useEffect(() => {
     const interval = setInterval(async () => {
-      setCurrentTime(Date.now());
+      // Pause automatic polling if the session is ENDED
+      if (data.quiz.sessionStatus === "ENDED") return;
       try {
         const res = await fetch(`/api/admin/quizzes/${quizId}/live`);
         if (res.ok) {
@@ -177,10 +203,10 @@ export default function LiveStageClient({
       } catch {
         // network polling error ignored gracefully
       }
-    }, 4000);
+    }, 60000);
 
     return () => clearInterval(interval);
-  }, [quizId]);
+  }, [quizId, data.quiz.sessionStatus]);
 
   // Lock body scroll when review modal is open
   useEffect(() => {
@@ -742,10 +768,19 @@ export default function LiveStageClient({
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
               <span>Remaining: {Math.max(0, metrics.totalParticipants * Math.max(1, questions.length) - metrics.totalAnswersSubmitted)} answers</span>
-              <span className="flex items-center gap-1 text-sky-600 font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" />
-                Syncing live
-              </span>
+              <button
+                type="button"
+                onClick={refetchTelemetry}
+                disabled={isManualSyncing}
+                title="Click to refresh telemetry now (auto-syncs every 1 min)"
+                className="flex items-center gap-1.5 text-sky-600 hover:text-sky-700 font-semibold cursor-pointer transition-colors"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isManualSyncing ? "bg-amber-500 animate-spin" : isLive ? "bg-sky-500 animate-ping" : "bg-slate-400"}`} />
+                <span>{isManualSyncing ? "Syncing..." : isLive ? "Syncs every 1m" : "Sync completed"}</span>
+                <svg className={`w-3 h-3 ${isManualSyncing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
             </div>
           </div>
 
