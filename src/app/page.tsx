@@ -233,14 +233,23 @@ export default async function HomePage() {
         */}
       </section>
 
-      {/* Footer Info */}
+      {/* Footer */}
       <footer className="max-w-6xl w-full mx-auto border-t-4 border-black pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs">
+        <div className="bg-[#FFE600] border-2 border-black px-3.5 py-1.5 font-black uppercase shadow-[3px_3px_0px_#000] text-black">
+          Developed by ECell-Bimtech
+        </div>
+        <div className="text-neutral-600 font-bold uppercase">
+          &copy; {new Date().getFullYear()} Quizzler
+        </div>
+
+        {/* Commented out: Technical documentation footer
         <div>
           Next.js 16 (Turbopack) &bull; TypeScript &bull; Tailwind CSS v4 &bull; Neon PostgreSQL / Drizzle ORM
         </div>
         <div className="bg-black text-white px-3 py-1 font-bold">
           Documentation: docs/PRD.md &bull; docs/ARCHITECTURE.md &bull; docs/IMPLEMENTATION_PLAN.md
         </div>
+        */}
       </footer>
     </main>
   );
