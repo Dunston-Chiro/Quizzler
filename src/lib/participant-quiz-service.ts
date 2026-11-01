@@ -90,13 +90,12 @@ function shuffleArray<T>(array: T[]): T[] {
  * 1. Get Quizzes Available for Participant Dashboard
  */
 export async function getParticipantQuizzes(userId: string) {
-  // Fetch quizzes that are scheduled, live, or ended
+  // Fetch quizzes that are scheduled, live, or ended AND visible in Arena
   const allQuizzes = await db
     .select({
       id: quizzes.id,
       title: quizzes.title,
       description: quizzes.description,
-      roomCode: quizzes.roomCode,
       sessionStatus: quizzes.sessionStatus,
       defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
       totalQuestions: quizzes.totalQuestions,
@@ -106,7 +105,12 @@ export async function getParticipantQuizzes(userId: string) {
       createdAt: quizzes.createdAt,
     })
     .from(quizzes)
-    .where(sql`${quizzes.sessionStatus} != 'DRAFT'`)
+    .where(
+      and(
+        sql`${quizzes.sessionStatus} != 'DRAFT'`,
+        eq(quizzes.showInArena, true)
+      )
+    )
     .orderBy(desc(quizzes.createdAt));
 
   // Fetch attempts by this user
@@ -145,6 +149,81 @@ export async function getParticipantQuizzes(userId: string) {
 }
 
 /**
+ * Validate Room Code for direct arena room entry
+ */
+export async function validateRoomCodeForEntry(roomCode: string) {
+  const normalizedCode = roomCode.trim().toUpperCase();
+
+  const [quiz] = await db
+    .select({
+      id: quizzes.id,
+      title: quizzes.title,
+      roomCode: quizzes.roomCode,
+      sessionStatus: quizzes.sessionStatus,
+    })
+    .from(quizzes)
+    .where(eq(quizzes.roomCode, normalizedCode))
+    .limit(1);
+
+  if (!quiz) {
+    throw new Error(`INVALID_ROOM_CODE: Invalid Room Code "${normalizedCode}". Please verify the passcode with your proctor.`);
+  }
+
+  if (quiz.sessionStatus === "DRAFT" || quiz.sessionStatus === "SCHEDULED") {
+    throw new Error("QUIZ_NOT_STARTED: This competition has not started yet (Status: Not Started). Please wait for the proctor to launch the stage.");
+  }
+
+  if (quiz.sessionStatus === "ENDED") {
+    throw new Error("QUIZ_CLOSED: This competition has already closed and is no longer accepting participants.");
+  }
+
+  if (quiz.sessionStatus !== "LIVE") {
+    throw new Error(`QUIZ_NOT_LIVE: Competition stage is currently ${quiz.sessionStatus} and cannot be entered.`);
+  }
+
+  return { quizId: quiz.id, roomCode: normalizedCode, title: quiz.title };
+}
+
+/**
+ * Validate Quiz Passcode before entering a live stage
+ */
+export async function validateQuizPasscode(quizId: string, passcode: string) {
+  const normalizedCode = passcode.trim().toUpperCase();
+
+  const [quiz] = await db
+    .select({
+      id: quizzes.id,
+      roomCode: quizzes.roomCode,
+      sessionStatus: quizzes.sessionStatus,
+    })
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) {
+    throw new Error("NOT_FOUND: Competition stage not found.");
+  }
+
+  if (quiz.sessionStatus === "DRAFT" || quiz.sessionStatus === "SCHEDULED") {
+    throw new Error("QUIZ_NOT_STARTED: This competition has not started yet (Status: Not Started).");
+  }
+
+  if (quiz.sessionStatus === "ENDED") {
+    throw new Error("QUIZ_CLOSED: This competition has already closed.");
+  }
+
+  if (quiz.sessionStatus !== "LIVE") {
+    throw new Error("QUIZ_NOT_LIVE: This competition is not currently accepting entries.");
+  }
+
+  if (!quiz.roomCode || quiz.roomCode.toUpperCase() !== normalizedCode) {
+    throw new Error("INCORRECT_PASSCODE: Incorrect Room Code / Passcode for this competition.");
+  }
+
+  return { quizId: quiz.id, roomCode: normalizedCode };
+}
+
+/**
  * 2. Start or Resume an Attempt
  * Enforces:
  * - Quiz must be LIVE
@@ -153,7 +232,8 @@ export async function getParticipantQuizzes(userId: string) {
  */
 export async function startOrResumeQuizAttempt(
   quizId: string,
-  session: SessionPayload
+  session: SessionPayload,
+  passcode?: string
 ) {
   // 1. Fetch quiz
   const [quiz] = await db
@@ -206,6 +286,13 @@ export async function startOrResumeQuizAttempt(
     throw new Error(
       `QUIZ_NOT_LIVE: Competition is currently ${quiz.sessionStatus}. You cannot start until the organizer launches the stage.`
     );
+  }
+
+  // Room code is required passcode to enter a new quiz session
+  if (quiz.roomCode) {
+    if (!passcode || passcode.trim().toUpperCase() !== quiz.roomCode.toUpperCase()) {
+      throw new Error("INVALID_PASSCODE: A valid Room Code / Passcode is required to enter this competition.");
+    }
   }
 
   // 3. Fetch all questions for this quiz
@@ -585,6 +672,66 @@ export async function submitQuestionAnswer(
 }
 
 /**
+ * 4b. Skip or Advance to Next Question without Submitting
+ * Allows student to progress without submitting an answer.
+ * Unanswered questions receive 0 credit without generating a fabricated answer record.
+ * One-way sequential progression is preserved.
+ */
+export async function skipOrAdvanceQuestion(
+  attemptId: string,
+  questionId: string,
+  session: SessionPayload
+) {
+  const [attempt] = await db
+    .select()
+    .from(participantAttempts)
+    .where(eq(participantAttempts.id, attemptId))
+    .limit(1);
+
+  if (!attempt) {
+    throw new Error("NOT_FOUND: Quiz attempt not found.");
+  }
+
+  // Ownership check
+  if (attempt.userId !== session.userId) {
+    throw new Error("FORBIDDEN: You do not own this attempt.");
+  }
+
+  if (attempt.status !== "IN_PROGRESS") {
+    throw new Error(`ATTEMPT_LOCKED: Attempt is already ${attempt.status}.`);
+  }
+
+  const questionOrder = (attempt.questionOrder as string[]) || [];
+  const expectedQuestionId = questionOrder[attempt.currentQuestionIndex];
+
+  if (expectedQuestionId !== questionId) {
+    throw new Error(
+      "INVALID_PROGRESSION: Out-of-order question skip. You cannot backtrack."
+    );
+  }
+
+  const nextIndex = attempt.currentQuestionIndex + 1;
+  const isCompleted = nextIndex >= questionOrder.length;
+  const now = new Date();
+
+  await db
+    .update(participantAttempts)
+    .set({
+      currentQuestionIndex: nextIndex,
+      currentQuestionStartedAt: now,
+      status: isCompleted ? "COMPLETED" : "IN_PROGRESS",
+      completedAt: isCompleted ? now : null,
+    })
+    .where(eq(participantAttempts.id, attemptId));
+
+  return {
+    success: true,
+    isCompleted,
+    nextIndex,
+  };
+}
+
+/**
  * 5. Record Anti-Cheat Proctoring Telemetry
  * Records window blur, tab switch events; rate-limited & validated
  */
@@ -712,7 +859,8 @@ export async function getParticipantResults(
       .where(
         and(
           eq(participantAttempts.quizId, quiz.id),
-          eq(participantAttempts.status, "COMPLETED")
+          eq(participantAttempts.status, "COMPLETED"),
+          eq(participantAttempts.qualifiedForNextRound, true)
         )
       )
       .orderBy(desc(participantAttempts.totalScore), asc(participantAttempts.completedAt))

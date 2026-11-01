@@ -17,6 +17,11 @@ import {
   toggleQuizSharing,
   toggleAttemptQualification,
   getStudentAttemptReview,
+  toggleQuizArenaVisibility,
+  requestQuizFullAccess,
+  respondToQuizAccessRequest,
+  cancelQuizAccessRequest,
+  getAdminAccessRequestsOverview,
   QuestionInput,
   QuizInput,
 } from "@/lib/quiz-service";
@@ -400,6 +405,121 @@ export async function getStudentAttemptReviewAction(
       err instanceof Error
         ? err.message
         : "Failed to fetch student answer review.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function toggleQuizArenaVisibilityAction(
+  quizId: string,
+  showInArena: boolean
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const updated = await toggleQuizArenaVisibility(quizId, showInArena, session);
+    await logActivity({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "QUIZ_VISIBILITY_UPDATED",
+      category: "QUIZ",
+      targetEntity: "QUIZ",
+      targetId: quizId,
+      metadata: { showInArena },
+    });
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/quizzes");
+    revalidatePath(`/admin/quizzes/${quizId}`);
+    revalidatePath(`/admin/quizzes/${quizId}/live`);
+    revalidatePath("/participant/dashboard");
+    return { success: true, data: updated };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to toggle Arena visibility.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function requestQuizFullAccessAction(
+  quizId: string,
+  note?: string
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const result = await requestQuizFullAccess(quizId, session, note);
+    await logActivity({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "ADMIN_FULL_ACCESS_REQUESTED",
+      category: "QUIZ",
+      targetEntity: "QUIZ",
+      targetId: quizId,
+      metadata: { note },
+    });
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/quizzes");
+    return { success: true, data: result };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to request full access.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function respondQuizAccessRequestAction(
+  requestId: string,
+  decision: "APPROVED" | "REJECTED"
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const result = await respondToQuizAccessRequest(
+      requestId,
+      decision,
+      session
+    );
+    await logActivity({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "ADMIN_ACCESS_REQUEST_RESOLVED",
+      category: "QUIZ",
+      targetEntity: "QUIZ_ACCESS_REQUEST",
+      targetId: requestId,
+      metadata: { decision },
+    });
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/quizzes");
+    return { success: true, data: result };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Failed to respond to access request.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function cancelQuizAccessRequestAction(
+  requestId: string
+): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    await cancelQuizAccessRequest(requestId, session);
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/quizzes");
+    return { success: true };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to cancel request.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function getAdminAccessRequestsAction(): Promise<ActionResult> {
+  try {
+    const session = await getRequiredAdminSession();
+    const list = await getAdminAccessRequestsOverview(session);
+    return { success: true, data: list };
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to fetch access requests.";
     return { success: false, error: msg };
   }
 }

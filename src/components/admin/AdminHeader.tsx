@@ -167,6 +167,30 @@ export default function AdminHeader({
             </div>
           </div>
 
+          {/* Exit Admin Panel option for SuperAdmin Only */}
+          {user.role === "SUPER_ADMIN" && (
+            <Link
+              href="/super-admin/dashboard"
+              title="Exit Admin Panel to Superadmin Dashboard"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-300 rounded-lg text-xs font-bold transition-all shadow-xs"
+            >
+              <svg
+                className="w-4 h-4 text-amber-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z"
+                />
+              </svg>
+              <span className="hidden sm:inline">Exit Admin Panel</span>
+            </Link>
+          )}
+
           <form action={logoutAction}>
             <button
               type="submit"

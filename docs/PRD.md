@@ -164,3 +164,37 @@ The platform operates across three discrete roles:
 | **Compute & Hosting** | Vercel / Cloudflare / Node | Serverless invocations & bandwidth | Zero long-running server processes; edge-cached static assets. |
 | **Database** | Neon Serverless PostgreSQL | **0.5 GiB storage**, **100 compute CU hours/mo**, PgBouncer pooling | Connection pooling (`-pooler`), short targeted queries, cold start suspension during inactivity. |
 | **Real-Time Telemetry**| Next.js Polling Route | Standard HTTP requests | 3-5s throttled polling intervals; minimal payload deltas; no paid WebSocket brokers. |
+
+---
+
+## 8. Participant UX, Arena Security & Delegated Administration Enhancements (Oct 2026)
+
+### 8.1 Arena Visibility & Passcode Gate
+- **Passcode Requirement:** Quizzes require the Room Code as a passcode to unlock and enter the live session.
+- **Arena Privacy:** Room codes are strictly hidden from student Arena cards and API payloads.
+- **Direct Code Entry:** The `Enter Room Code` join bar validates that the room is `LIVE` and the student is authenticated before granting access. Non-live rooms (`DRAFT`, `SCHEDULED`, `ENDED`) display clear feedback explaining why entry is unavailable.
+- **Arena Quiz Entry:** Clicking a live quiz in the Arena prompts for the Room Code via a Neobrutalist modal, verifying it server-side before transition.
+
+### 8.2 Advance Without Submitting (Question Skipping)
+- Participants can progress through questions without selecting an answer by clicking `NEXT QUESTION (SKIP) ->`.
+- Server records 0 points and inserts no records into `participant_answers`.
+- Progression is strictly one-way and maintains server-authoritative question timing.
+
+### 8.3 Auto-Submit on Admin Closure
+- When an admin marks a quiz as `ENDED`, all attempts with status `IN_PROGRESS` are automatically transitioned to `COMPLETED` with timestamp `completedAt = NOW()`.
+- Active participants detect closure via status polling and are routed directly to their results scorecard.
+
+### 8.4 Qualified Candidates Leaderboard
+- The student leaderboard displays only participants who have been explicitly flagged by organizers as `qualifiedForNextRound = true`.
+- An informative empty state renders when no candidates have been qualified yet.
+
+### 8.5 Arena Show/Hide Toggle
+- Admins can toggle `show_in_arena` to hide competition stages from public arena listings while preserving draft/live lifecycle execution.
+
+### 8.6 Admin-to-Admin Full Control Request System
+- Non-owner admins observing shared quizzes can request full administrative privileges.
+- Quiz creators and superadmins review and approve/reject requests via a persistent notification center on `/admin/dashboard`.
+- Approval grants full question editing, setting mutation, and live proctoring capabilities for that specific quiz without global role escalation.
+
+### 8.7 Superadmin Navigation
+- Superadmins operating within the Admin panel have a dedicated `Exit Admin Panel` link to seamlessly navigate back to `/super-admin/dashboard`.

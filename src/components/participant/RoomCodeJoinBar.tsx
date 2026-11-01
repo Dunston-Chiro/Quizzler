@@ -18,7 +18,7 @@ export default function RoomCodeJoinBar() {
     startTransition(async () => {
       const res = await joinQuizByRoomCodeAction(roomCode.trim());
       if (res.success && res.data) {
-        router.push(`/participant/quiz/${res.data.quizId}`);
+        router.push(`/participant/quiz/${res.data.quizId}?code=${encodeURIComponent(res.data.roomCode)}`);
       } else {
         setErrorMsg(res.error || "Room code not found or inactive.");
       }

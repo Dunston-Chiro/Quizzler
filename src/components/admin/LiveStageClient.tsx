@@ -8,6 +8,7 @@ import {
   toggleTabSwitchCountVisibilityAction,
   toggleQuizSharingAction,
   toggleQualificationAction,
+  toggleQuizArenaVisibilityAction,
   createQuestionAction,
   updateQuizAction,
   getStudentAttemptReviewAction,
@@ -64,6 +65,7 @@ export interface LiveStageClientProps {
       showLeaderboard?: boolean;
       showTabSwitchCount?: boolean;
       isSharedWithAdmins?: boolean;
+      showInArena?: boolean;
       ownerName?: string;
       isReadOnly?: boolean;
       defaultTimePerQuestionSec: number;
@@ -339,6 +341,22 @@ export default function LiveStageClient({
           ...prev,
           quiz: { ...prev.quiz, isSharedWithAdmins: newVal },
         }));
+      }
+    });
+  };
+
+  const handleToggleArenaVisibility = () => {
+    if (isReadOnly) return;
+    startTransition(async () => {
+      const newVal = !(quiz.showInArena ?? true);
+      const res = await toggleQuizArenaVisibilityAction(quizId, newVal);
+      if (res.success) {
+        setData((prev) => ({
+          ...prev,
+          quiz: { ...prev.quiz, showInArena: newVal },
+        }));
+      } else {
+        alert(res.error || "Failed to update Arena visibility.");
       }
     });
   };
@@ -656,6 +674,20 @@ export default function LiveStageClient({
             />
             <span className={quiz.isSharedWithAdmins ? "text-sky-800 font-bold" : ""}>
               Share live quiz with other Admins
+            </span>
+          </label>
+
+          {/* Show / Hide from Competition Arena Toggle */}
+          <label className={`flex items-center gap-2 text-slate-700 font-medium ${isReadOnly ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`} title="Controls whether this stage is visible in the Participant Competition Arena">
+            <input
+              type="checkbox"
+              checked={Boolean(quiz.showInArena ?? true)}
+              onChange={handleToggleArenaVisibility}
+              disabled={isReadOnly || isPending}
+              className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
+            />
+            <span className={quiz.showInArena ?? true ? "text-teal-800 font-bold" : ""}>
+              Show in Competition Arena
             </span>
           </label>
         </div>

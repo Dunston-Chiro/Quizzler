@@ -127,8 +127,8 @@ export default function QuizResultsClient({
         </div>
       )}
 
-      {/* Top 10 Leaderboard (If Enabled by Admin) */}
-      {data.leaderboard && data.leaderboard.length > 0 && (
+      {/* Top 10 Leaderboard (If Enabled by Admin: Selected Candidates Only) */}
+      {(data.showLeaderboard || data.resultsReleased) && (
         <div className="bg-white border-4 border-black p-6 sm:p-8 shadow-[8px_8px_0px_#000] mb-8">
           <div className="flex items-center justify-between pb-3 border-b-3 border-black mb-4">
             <div className="flex items-center gap-2">
@@ -136,15 +136,16 @@ export default function QuizResultsClient({
                 TOP 10 LEADERBOARD
               </span>
               <h2 className="text-xl font-black uppercase tracking-tight">
-                Campus Standings
+                Qualified Candidates Standings
               </h2>
             </div>
             <span className="font-mono text-xs font-bold text-neutral-600">
-              Live Verified Rankings
+              Selected Finalists
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          {data.leaderboard && data.leaderboard.length > 0 ? (
+            <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse font-sans text-xs sm:text-sm">
               <thead>
                 <tr className="bg-black text-white font-mono uppercase text-xs">
@@ -209,6 +210,19 @@ export default function QuizResultsClient({
               </tbody>
             </table>
           </div>
+          ) : (
+            <div className="p-8 text-center bg-[#FFFDF8] border-2 border-dashed border-black">
+              <div className="w-10 h-10 bg-[#00F0FF] border-2 border-black font-black text-lg flex items-center justify-center mx-auto mb-2 shadow-[2px_2px_0px_#000]">
+                ⏳
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-tight mb-1">
+                No Selected Candidates Yet
+              </h3>
+              <p className="text-xs font-medium text-neutral-600 font-mono">
+                The proctor has not qualified or selected candidates for the next round leaderboard yet. Check back soon.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

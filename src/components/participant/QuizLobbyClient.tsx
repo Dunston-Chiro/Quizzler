@@ -10,13 +10,14 @@ interface QuizLobbyClientProps {
     id: string;
     title: string;
     description: string | null;
-    roomCode: string | null;
+    roomCode?: string | null;
     sessionStatus: string;
     totalQuestions: number;
     totalPoints: number;
     defaultTimePerQuestionSec: number;
     showTabSwitchCount?: boolean;
   };
+  initialPasscode?: string;
   existingAttempt: {
     id: string;
     status: string;
@@ -29,19 +30,21 @@ interface QuizLobbyClientProps {
 
 export default function QuizLobbyClient({
   quiz,
+  initialPasscode = "",
   existingAttempt,
   userName,
   userTeam,
   institution,
 }: QuizLobbyClientProps) {
   const router = useRouter();
+  const [passcode, setPasscode] = useState(initialPasscode);
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleStart = () => {
     setErrorMsg(null);
     startTransition(async () => {
-      const res = await startQuizAttemptAction(quiz.id);
+      const res = await startQuizAttemptAction(quiz.id, passcode.trim());
       if (res.success && res.data) {
         if (res.data.status === "COMPLETED") {
           router.push(`/participant/quiz/${quiz.id}/results`);
@@ -60,13 +63,13 @@ export default function QuizLobbyClient({
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 md:p-10 font-sans">
       <div className="bg-white border-4 border-black p-6 sm:p-10 shadow-[8px_8px_0px_#000]">
-        {/* Top Header Badge */}
+        {/* Top Header Badge (Passcode Protected, Never leaks Room Code) */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="inline-block bg-[#FFE600] border-2 border-black px-3 py-1 font-mono text-xs font-black uppercase shadow-[2px_2px_0px_#000]">
-            ROOM CODE: {quiz.roomCode || "N/A"}
+          <div className="inline-block bg-[#00F0FF] border-2 border-black px-3 py-1 font-mono text-xs font-black uppercase shadow-[2px_2px_0px_#000]">
+            🔒 PASSCODE PROTECTED LOBBY
           </div>
-          <div className="inline-block bg-black text-[#00F0FF] px-3 py-1 font-mono text-xs font-bold uppercase">
-            STATUS: {quiz.sessionStatus}
+          <div className="inline-block bg-black text-[#FFE600] px-3 py-1 font-mono text-xs font-bold uppercase">
+            STATUS: {quiz.sessionStatus === "SCHEDULED" ? "NOT STARTED" : quiz.sessionStatus}
           </div>
         </div>
 
@@ -127,6 +130,25 @@ export default function QuizLobbyClient({
             )}
           </ul>
         </div>
+
+        {!existingAttempt && isLive && (
+          <div className="mb-6 p-4 bg-[#FFFDF8] border-3 border-black shadow-[3px_3px_0px_#000]">
+            <label className="block font-mono text-xs font-black uppercase mb-1.5">
+              Room Code / Passcode
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="ENTER PASSCODE (E.G. STG2-BIM)..."
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value.toUpperCase())}
+              className="w-full bg-white border-2 border-black px-4 py-2 font-mono font-black text-sm uppercase focus:outline-none focus:bg-[#FFE600]/20"
+            />
+            <span className="block text-[11px] font-mono text-neutral-600 mt-1">
+              {passcode ? "✓ Passcode configured." : "Passcode required to enter this live stage."}
+            </span>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="mb-6 p-3 bg-[#FF5C5C] border-3 border-black font-mono text-xs font-bold text-black shadow-[3px_3px_0px_#000]">

@@ -199,3 +199,37 @@
 - [x] Automated Test Suite (`scripts/test-admin-live-enhancements.ts`):
   - 8-test verification suite covering question injection, full progress rendering, review modal, qualification toggle, 4-way sorting, cross-admin visibility, view-only enforcement, superadmin global clearance, and revocation on unsharing.
   - Added `"test:live"` script to `package.json`.
+
+---
+
+## Phase 7: Participant UX, Arena Visibility & Administrative Delegation
+
+- [x] **Database Schema & Migrations:**
+  - [x] Add `show_in_arena` boolean column to `quizzes` (default `true`).
+  - [x] Create `quiz_access_requests` table with `status` enum (`PENDING`, `APPROVED`, `REJECTED`), foreign keys, and indexes.
+  - [x] Run `npm run db:generate` to produce `0007_careless_otto_octavius.sql`.
+  - [x] Apply DDL migration to Neon PostgreSQL.
+
+- [x] **Backend Services & Server Actions:**
+  - [x] Sanitize `getParticipantQuizzes` to omit `roomCode` and filter by `showInArena = true`.
+  - [x] Implement `validateRoomCodeForEntry` and `validateQuizPasscode`.
+  - [x] Implement `skipOrAdvanceQuestion` awarding 0 points and inserting 0 answer records.
+  - [x] Enhance `updateQuizStatus("ENDED")` to batch-finalize `IN_PROGRESS` attempts.
+  - [x] Filter `getParticipantResults` leaderboard strictly by `qualifiedForNextRound = true`.
+  - [x] Implement `toggleQuizArenaVisibility`, `requestQuizFullAccess`, `respondToQuizAccessRequest`, `cancelQuizAccessRequest`, and `getAdminAccessRequestsOverview`.
+  - [x] Export corresponding server actions in `src/app/actions/participant-quiz.ts` and `src/app/actions/admin-quiz.ts`.
+
+- [x] **Frontend UI & Dashboards:**
+  - [x] Build `ArenaQuizList.tsx` with passcode verification modal and status badges (`NOT STARTED`, `● LIVE NOW`, `ENDED`).
+  - [x] Update `RoomCodeJoinBar.tsx` for direct room validation and routing.
+  - [x] Add "NEXT QUESTION (SKIP) ->" and auto-skip on timeout in `TimedQuizRunnerClient.tsx`.
+  - [x] Update `QuizResultsClient.tsx` with qualified standings and empty state.
+  - [x] Add "Exit Admin Panel" link for superadmins in `AdminHeader.tsx`.
+  - [x] Mount `PendingAccessRequests.tsx` on `/admin/dashboard`.
+  - [x] Add Arena visibility toggles to `LiveStageClient.tsx`, `QuizManagerClient.tsx`, and `QuestionStudioClient.tsx`.
+  - [x] Wire up access request buttons ("Request Full Access", "⏳ Request Pending", "✓ Full Control Granted") in `QuizManagerClient.tsx`.
+
+- [x] **Verification & Test Coverage:**
+  - [x] Automated test suite: `scripts/test-arena-and-participant-enhancements.ts` (30/30 tests passed).
+  - [x] Verified existing suites: `test:ownership`, `test:engine`, `test:live`, `test:users`, `test:governance`.
+  - [x] Production build verification: `npm run build` completed with 0 errors across 27 routes.

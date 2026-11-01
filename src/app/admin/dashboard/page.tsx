@@ -3,7 +3,11 @@ import { requireRole } from "@/lib/auth-guard";
 import db from "@/db";
 import { quizzes } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { getSharedLiveQuizzes } from "@/lib/quiz-service";
+import {
+  getSharedLiveQuizzes,
+  getAdminAccessRequestsOverview,
+} from "@/lib/quiz-service";
+import PendingAccessRequests from "@/components/admin/PendingAccessRequests";
 
 export default async function AdminDashboardPage() {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"], "/login");
@@ -28,6 +32,7 @@ export default async function AdminDashboardPage() {
 
   const userQuizzes = await quizQuery.orderBy(desc(quizzes.updatedAt)).limit(6);
   const sharedLiveQuizzes = await getSharedLiveQuizzes(session);
+  const pendingRequests = await getAdminAccessRequestsOverview(session);
 
   // Active quiz or latest quiz for active room indicator (owned or shared)
   const activeQuiz =
@@ -84,6 +89,9 @@ export default async function AdminDashboardPage() {
 
       {/* Main Launchpad Grid */}
       <div className="flex-1 p-6 space-y-8 overflow-y-auto">
+        {/* Pending Full-Control Access Requests Delegation Panel */}
+        <PendingAccessRequests initialRequests={pendingRequests} />
+
         {/* Section 1: Major Activities (Socrative 3-tile grid) */}
         <div>
           <div className="flex items-center justify-between mb-3">

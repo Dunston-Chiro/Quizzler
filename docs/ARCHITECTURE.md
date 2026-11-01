@@ -325,3 +325,43 @@ sequenceDiagram
    - **Candidate Selection / Round 2 Gate:** Selection buttons are disabled in observer mode; mutations are strictly blocked server-side by `toggleAttemptQualification`.
    - **Stage Controls & Visibility Toggles:** Session lifecycle controls (Live/Draft/Ended), Question Cadence selectors, "Show Student Names", "Show Answers", leaderboard visibility, proctoring blur display, and sharing toggles are all disabled for observers (`disabled={isReadOnly}`).
 
+---
+
+### 11. Participant UX, Arena Passcode Security & Delegated Admin Access Control Architecture
+
+1. **Room Code as Mandatory Passcode & Arena Leakage Prevention:**
+   - Room codes are required access credentials (`passcode`) to enter any competition stage.
+   - Arena quiz listings (`getParticipantQuizzes`) completely omit the `roomCode` column and property from returned DTOs.
+   - Client cards in the Competition Arena (`/participant/dashboard`) render status badges (`● LIVE NOW`, `NOT STARTED`, `ENDED`) without exposing room codes.
+   - Non-live stages prevent entry. For live stages, a Neobrutalist Passcode Verification modal requests the room code; upon server validation (`validateQuizPasscode`), the participant transitions into the lobby or runner.
+   - Direct room code entry (`validateRoomCodeForEntry` / `RoomCodeJoinBar`) accepts only `LIVE` rooms and verifies participant authentication, rejecting `DRAFT`, `SCHEDULED`, or `ENDED` sessions with actionable error messages.
+
+2. **Advance Without Submitting (Skip Question Mechanics):**
+   - Participants can choose "NEXT QUESTION (SKIP) ->" in `TimedQuizRunnerClient` without selecting any option.
+   - Handled server-side by `skipOrAdvanceQuestion`: advances `currentQuestionIndex` and updates authoritative timestamp.
+   - Strict scoring invariant: 0 points/marks awarded, and NO fake or synthetic records are inserted into `participant_answers`.
+   - Timer expiration on unselected questions triggers identical skip advancement cleanly.
+
+3. **Admin Activity Closure Auto-Submit:**
+   - When an organizer transitions a quiz to `session_status = 'ENDED'`, `updateQuizStatus` batch-updates all active `IN_PROGRESS` attempts for that quiz to `status = 'COMPLETED'` and sets `completedAt = NOW()`.
+   - Client runner polls quiz status; upon closure detection, connected participants are notified and cleanly redirected to their results scorecard.
+
+4. **Leaderboard Qualified Candidates Invariant:**
+   - Participant scorecard leaderboard (`getParticipantResults`) filters attempts strictly by `qualifiedForNextRound = true`.
+   - Participants who are not marked as qualified by the organizer are excluded from the Top 10 standings.
+   - An empty state ("No candidates have been qualified for Round 2 yet") renders when no qualifiers exist.
+
+5. **Competition Arena Visibility Toggle (`show_in_arena`):**
+   - Configured via `quizzes.show_in_arena BOOLEAN NOT NULL DEFAULT TRUE`.
+   - Allows creators, granted full-control admins, or superadmins to hide a quiz from the student Arena without modifying its lifecycle status (`DRAFT`, `LIVE`, `ENDED`).
+   - Managed from the Live Stage, Quiz Management Studio, and Question Studio settings modal.
+
+6. **Admin-to-Admin Full Control Request & Delegation Workflow:**
+   - Modeled via `quiz_access_requests` table with status enum (`PENDING`, `APPROVED`, `REJECTED`).
+   - Non-owner admins observing a shared quiz can click "Request Full Access" with an optional note.
+   - The creator admin receives real-time and persistent notification cards in `/admin/dashboard` ("Pending Access Requests") with one-click "Allow Full Control" and "Reject" actions.
+   - Approved admins receive full mutation privileges for that specific quiz (editing questions, updating settings, injecting live questions, toggling Arena visibility, and managing Round 2 qualifiers) via `assertOwnership` clearance checks without global role elevation.
+
+7. **Super-Admin "Exit Admin Panel" Navigation:**
+   - Visible exclusively in `AdminHeader` when `user.role === 'SUPER_ADMIN'`.
+   - Provides a clean exit route back to `/super-admin/dashboard` without modifying or disrupting live quiz state.

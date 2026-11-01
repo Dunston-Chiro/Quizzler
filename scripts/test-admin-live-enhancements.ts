@@ -202,8 +202,8 @@ async function runTests() {
     // Test 4: Participant Activity & In-Flight Tracking
     // -------------------------------------------------------------------------
     console.log("\n[Test 4] Simulating participant responses and recording tab switch events...");
-    const p1Attempt = await startOrResumeQuizAttempt(quiz.id, sessionStudent1);
-    const p2Attempt = await startOrResumeQuizAttempt(quiz.id, sessionStudent2);
+    const p1Attempt = await startOrResumeQuizAttempt(quiz.id, sessionStudent1, quiz.roomCode || undefined);
+    const p2Attempt = await startOrResumeQuizAttempt(quiz.id, sessionStudent2, quiz.roomCode || undefined);
 
     // Retrieve each participant's authoritative randomized sequence
     const p1OrderRes = await pool.query("SELECT question_order FROM participant_attempts WHERE id = $1", [p1Attempt.attemptId]);

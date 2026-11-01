@@ -36,6 +36,12 @@ export const attemptStatusEnum = pgEnum("attempt_status", [
   "DISQUALIFIED",
 ]);
 
+export const quizAccessRequestStatusEnum = pgEnum("quiz_access_request_status", [
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+]);
+
 export const proctorEventTypeEnum = pgEnum("proctor_event_type", [
   "TAB_SWITCH",
   "WINDOW_BLUR",
@@ -93,6 +99,7 @@ export const quizzes = pgTable(
     showLeaderboard: boolean("show_leaderboard").default(false).notNull(),
     showTabSwitchCount: boolean("show_tab_switch_count").default(false).notNull(),
     isSharedWithAdmins: boolean("is_shared_with_admins").default(false).notNull(),
+    showInArena: boolean("show_in_arena").default(true).notNull(),
     defaultTimePerQuestionSec: integer("default_time_per_question_sec")
       .default(30)
       .notNull(),
@@ -283,6 +290,49 @@ export const auditLogs = pgTable(
 );
 
 // -----------------------------------------------------------------------------
+// 8. Quiz Access Requests Table (Full-Control Admin Delegations)
+// -----------------------------------------------------------------------------
+export const quizAccessRequests = pgTable(
+  "quiz_access_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    quizId: uuid("quiz_id")
+      .references(() => quizzes.id, { onDelete: "cascade" })
+      .notNull(),
+    requestingAdminId: uuid("requesting_admin_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    ownerId: uuid("owner_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    status: quizAccessRequestStatusEnum("status")
+      .default("PENDING")
+      .notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    respondedBy: uuid("responded_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [
+    index("quiz_access_requests_quiz_admin_idx").on(
+      table.quizId,
+      table.requestingAdminId
+    ),
+    index("quiz_access_requests_owner_status_idx").on(
+      table.ownerId,
+      table.status
+    ),
+  ]
+);
+
+// -----------------------------------------------------------------------------
 // Drizzle Relations
 // -----------------------------------------------------------------------------
 
@@ -343,6 +393,26 @@ export const participantAnswersRelations = relations(
   })
 );
 
+export const quizAccessRequestsRelations = relations(
+  quizAccessRequests,
+  ({ one }) => ({
+    quiz: one(quizzes, {
+      fields: [quizAccessRequests.quizId],
+      references: [quizzes.id],
+    }),
+    requestingAdmin: one(users, {
+      fields: [quizAccessRequests.requestingAdminId],
+      references: [users.id],
+      relationName: "accessRequestedBy",
+    }),
+    owner: one(users, {
+      fields: [quizAccessRequests.ownerId],
+      references: [users.id],
+      relationName: "accessOwnedBy",
+    }),
+  })
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Quiz = typeof quizzes.$inferSelect;
@@ -351,3 +421,5 @@ export type ParticipantAttempt = typeof participantAttempts.$inferSelect;
 export type ParticipantAnswer = typeof participantAnswers.$inferSelect;
 export type ProctoringEvent = typeof proctoringEvents.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type QuizAccessRequest = typeof quizAccessRequests.$inferSelect;
+export type NewQuizAccessRequest = typeof quizAccessRequests.$inferInsert;

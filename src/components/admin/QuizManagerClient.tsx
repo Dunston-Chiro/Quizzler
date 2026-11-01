@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createQuizAction, deleteQuizAction } from "@/app/actions/admin-quiz";
+import {
+  createQuizAction,
+  deleteQuizAction,
+  requestQuizFullAccessAction,
+  cancelQuizAccessRequestAction,
+  toggleQuizArenaVisibilityAction,
+} from "@/app/actions/admin-quiz";
 
 export interface AdminQuizItem {
   id: string;
@@ -17,6 +23,11 @@ export interface AdminQuizItem {
   resultsReleased: boolean;
   defaultTimePerQuestionSec: number;
   isSharedWithAdmins?: boolean;
+  showInArena?: boolean;
+  isOwner?: boolean;
+  hasFullControl?: boolean;
+  accessRequestStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
+  accessRequestId?: string | null;
   totalQuestions: number;
   totalPoints: number;
   createdAt: Date | string;
@@ -114,6 +125,60 @@ export default function QuizManagerClient({
         router.refresh();
       } else {
         alert(res.error || "Could not delete quiz.");
+      }
+    });
+  };
+
+  const handleToggleArena = (quizId: string, currentVal: boolean) => {
+    startTransition(async () => {
+      const newVal = !currentVal;
+      const res = await toggleQuizArenaVisibilityAction(quizId, newVal);
+      if (res.success) {
+        setQuizzes((prev) =>
+          prev.map((q) => (q.id === quizId ? { ...q, showInArena: newVal } : q))
+        );
+      } else {
+        alert(res.error || "Failed to update Arena visibility.");
+      }
+    });
+  };
+
+  const handleRequestAccess = (quizId: string) => {
+    startTransition(async () => {
+      const res = await requestQuizFullAccessAction(quizId);
+      if (res.success && res.data) {
+        const d = res.data as { requestId?: string };
+        setQuizzes((prev) =>
+          prev.map((q) =>
+            q.id === quizId
+              ? {
+                  ...q,
+                  accessRequestStatus: "PENDING",
+                  accessRequestId: d?.requestId || null,
+                }
+              : q
+          )
+        );
+        alert("Full access request submitted to the quiz creator.");
+      } else {
+        alert(res.error || "Failed to request access.");
+      }
+    });
+  };
+
+  const handleCancelAccess = (quizId: string, requestId: string) => {
+    startTransition(async () => {
+      const res = await cancelQuizAccessRequestAction(requestId);
+      if (res.success) {
+        setQuizzes((prev) =>
+          prev.map((q) =>
+            q.id === quizId
+              ? { ...q, accessRequestStatus: null, accessRequestId: null }
+              : q
+          )
+        );
+      } else {
+        alert(res.error || "Failed to cancel request.");
       }
     });
   };
@@ -245,6 +310,7 @@ export default function QuizManagerClient({
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredQuizzes.map((quiz) => {
               const isOwner = quiz.createdBy === currentUserId || currentUserRole === "SUPER_ADMIN";
+              const hasFullControl = isOwner || quiz.accessRequestStatus === "APPROVED";
 
               return (
                 <div
@@ -252,15 +318,53 @@ export default function QuizManagerClient({
                   className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between"
                 >
                   <div>
-                    {/* Header: Room & Status */}
+                    {/* Header: Room, Arena Visibility & Status */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200/90 rounded-md px-2 py-0.5 text-xs font-mono font-bold text-slate-700">
-                        <span>ROOM:</span>
-                        <span className="text-sky-700">{quiz.roomCode || "N/A"}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200/90 rounded-md px-2 py-0.5 text-xs font-mono font-bold text-slate-700">
+                          <span>ROOM:</span>
+                          <span className="text-sky-700">{quiz.roomCode || "N/A"}</span>
+                        </div>
+
+                        {/* Arena Visibility Toggle */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleToggleArena(
+                              quiz.id,
+                              Boolean(quiz.showInArena ?? true)
+                            )
+                          }
+                          disabled={!isOwner && !hasFullControl || isPending}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                            quiz.showInArena ?? true
+                              ? "bg-teal-50 text-teal-800 border-teal-200"
+                              : "bg-slate-100 text-slate-500 border-slate-300"
+                          } ${
+                            isOwner || hasFullControl
+                              ? "cursor-pointer hover:opacity-85"
+                              : "cursor-default opacity-80"
+                          }`}
+                          title={
+                            isOwner || hasFullControl
+                              ? "Click to toggle visibility in Competition Arena"
+                              : "Arena visibility managed by quiz creator"
+                          }
+                        >
+                          <span>
+                            {quiz.showInArena ?? true
+                              ? "🌐 In Arena"
+                              : "🔒 Hidden"}
+                          </span>
+                        </button>
                       </div>
+
                       <div className="flex items-center gap-1.5">
                         {!isOwner && quiz.isSharedWithAdmins && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300" title="Shared by another organizer in view-only mode">
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300"
+                            title="Shared by another organizer in view-only mode"
+                          >
                             👁️ Shared
                           </span>
                         )}
@@ -292,12 +396,58 @@ export default function QuizManagerClient({
                       </div>
                     </div>
 
-                    {/* Author attribution for shared quizzes */}
+                    {/* Non-owner Full Access Delegation Bar */}
                     {!isOwner && (
-                      <div className="text-[11px] text-slate-500 mb-3 truncate flex items-center gap-1">
-                        <span className="font-semibold text-slate-600">Created by:</span>
-                        <span className="font-bold text-slate-800">{quiz.creatorName}</span>
-                        <span className="text-slate-400 font-mono">({quiz.creatorEmail})</span>
+                      <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1 text-[11px] text-slate-600">
+                          <span className="font-semibold">Creator:</span>
+                          <span className="font-bold text-slate-800">{quiz.creatorName}</span>
+                        </div>
+
+                        {hasFullControl ? (
+                          <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] border border-emerald-300">
+                            ✓ Full Control Granted
+                          </span>
+                        ) : quiz.accessRequestStatus === "PENDING" ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded text-[10px] border border-amber-300">
+                              ⏳ Request Pending
+                            </span>
+                            {quiz.accessRequestId && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelAccess(quiz.id, quiz.accessRequestId!)}
+                                disabled={isPending}
+                                className="text-[10px] text-slate-400 hover:text-rose-600 font-semibold underline cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        ) : quiz.accessRequestStatus === "REJECTED" ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-[10px] border border-rose-300">
+                              ✕ Rejected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRequestAccess(quiz.id)}
+                              disabled={isPending}
+                              className="text-[10px] text-sky-600 hover:text-sky-700 font-bold underline cursor-pointer"
+                            >
+                              Request Again
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestAccess(quiz.id)}
+                            disabled={isPending}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] transition-colors cursor-pointer shadow-2xs"
+                          >
+                            Request Full Access
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -318,7 +468,7 @@ export default function QuizManagerClient({
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
-                      {isOwner ? "Question Studio" : "View Questions (View-Only)"}
+                      {isOwner || hasFullControl ? "Question Studio" : "View Questions (View-Only)"}
                     </Link>
 
                     <div className="flex items-center gap-1.5">
@@ -338,7 +488,7 @@ export default function QuizManagerClient({
                       <Link
                         href={`/admin/quizzes/${quiz.id}/live`}
                         className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 ${
-                          isOwner
+                          isOwner || hasFullControl
                             ? "bg-sky-500 hover:bg-sky-600 text-white"
                             : "bg-slate-900 hover:bg-slate-800 text-white"
                         }`}
@@ -347,7 +497,7 @@ export default function QuizManagerClient({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {isOwner ? "Launch Live Stage" : "Observe Live Stage"}
+                        {isOwner || hasFullControl ? "Launch Live Stage" : "Observe Live Stage"}
                       </Link>
                     </div>
                   </div>

@@ -211,7 +211,7 @@ async function runTimedEngineTests() {
     console.log("\n[Test 1] Attempting to start attempt while quiz is in DRAFT...");
     let draftBlocked = false;
     try {
-      await startOrResumeQuizAttempt(quiz.id, p1Session);
+      await startOrResumeQuizAttempt(quiz.id, p1Session, quiz.roomCode || undefined);
     } catch (err: unknown) {
       draftBlocked = true;
       console.log(`✓ Draft access properly rejected: "${(err as Error).message}"`);
@@ -227,14 +227,14 @@ async function runTimedEngineTests() {
     await updateQuizStatus(quiz.id, "LIVE", adminSession);
     console.log("✓ Quiz status updated to LIVE by Admin.");
 
-    const p1AttemptRes = await startOrResumeQuizAttempt(quiz.id, p1Session);
-    const p2AttemptRes = await startOrResumeQuizAttempt(quiz.id, p2Session);
+    const p1AttemptRes = await startOrResumeQuizAttempt(quiz.id, p1Session, quiz.roomCode || undefined);
+    const p2AttemptRes = await startOrResumeQuizAttempt(quiz.id, p2Session, quiz.roomCode || undefined);
 
     console.log(`✓ Participant 1 Attempt: ${p1AttemptRes.attemptId} (${p1AttemptRes.status})`);
     console.log(`✓ Participant 2 Attempt: ${p2AttemptRes.attemptId} (${p2AttemptRes.status})`);
 
     // Verify duplicate attempt prevention
-    const p1ResumeRes = await startOrResumeQuizAttempt(quiz.id, p1Session);
+    const p1ResumeRes = await startOrResumeQuizAttempt(quiz.id, p1Session, quiz.roomCode || undefined);
     if (p1ResumeRes.attemptId !== p1AttemptRes.attemptId) {
       throw new Error("FAIL: Duplicate attempt was created instead of resuming existing attempt!");
     }
@@ -497,6 +497,12 @@ async function runTimedEngineTests() {
     console.log("\n[Test 12] Admin releases results and toggles Top 10 Leaderboard...");
     await toggleResultVisibility(quiz.id, true, adminSession);
     await toggleLeaderboardVisibility(quiz.id, true, adminSession);
+
+    // Qualify Participant 1 to appear on the qualified leaderboard
+    await db
+      .update(participantAttempts)
+      .set({ qualifiedForNextRound: true })
+      .where(eq(participantAttempts.id, p1AttemptRes.attemptId));
 
     const releasedResults = await getParticipantResults(p1AttemptRes.attemptId, p1Session);
 

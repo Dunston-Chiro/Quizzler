@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   submitAnswerAction,
+  skipQuestionAction,
   reportProctorViolationAction,
   getActiveQuestionAction,
 } from "@/app/actions/participant-quiz";
@@ -95,6 +96,54 @@ export default function TimedQuizRunnerClient({
     [currentData.attemptId, currentData.quizId, currentQuestion.id, router]
   );
 
+  // 1b. Skip Question Function (Advance without submitting, 0 credit, no fabricated answer)
+  const executeSkip = useCallback(async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      const res = await skipQuestionAction(
+        currentData.attemptId,
+        currentQuestion.id
+      );
+
+      if (res.success && res.data) {
+        if (res.data.isCompleted) {
+          router.push(`/participant/quiz/${currentData.quizId}/results`);
+          return;
+        }
+
+        const nextRes = await getActiveQuestionAction(currentData.attemptId);
+        if (nextRes.success && nextRes.data) {
+          const nextPayload = nextRes.data as
+            | { status: "COMPLETED" | "DISQUALIFIED"; attemptId: string; quizId: string }
+            | ParticipantQuestionPayload;
+
+          if ("status" in nextPayload && nextPayload.status === "COMPLETED") {
+            router.push(`/participant/quiz/${currentData.quizId}/results`);
+            return;
+          }
+
+          const validNext = nextPayload as ParticipantQuestionPayload;
+          setCurrentData(validNext);
+          setSelectedOptionIds([]);
+          setTimeRemaining(validNext.timeRemainingSeconds);
+          setTabViolations(validNext.tabSwitchCount);
+        } else {
+          router.push(`/participant/quiz/${currentData.quizId}/results`);
+        }
+      } else {
+        alert(res.error || "Failed to advance to next question.");
+      }
+    } catch (err: unknown) {
+      console.error("Skip error:", err);
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [currentData.attemptId, currentData.quizId, currentQuestion.id, router]);
+
   // 2. Synchronized Countdown Timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -103,7 +152,11 @@ export default function TimedQuizRunnerClient({
           clearInterval(timer);
           // Automatic timer expiration
           if (!submittingRef.current) {
-            executeSubmit(selectedOptionIds);
+            if (selectedOptionIds.length > 0) {
+              executeSubmit(selectedOptionIds);
+            } else {
+              executeSkip();
+            }
           }
           return 0;
         }
@@ -112,7 +165,32 @@ export default function TimedQuizRunnerClient({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion.id, selectedOptionIds, executeSubmit]);
+  }, [currentQuestion.id, selectedOptionIds, executeSubmit, executeSkip]);
+
+  // 2b. Auto-Finalization on Admin Activity Closure
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (submittingRef.current) return;
+      try {
+        const checkRes = await getActiveQuestionAction(currentData.attemptId);
+        if (checkRes.success && checkRes.data) {
+          const payload = checkRes.data as { status?: string };
+          if (payload && "status" in payload && payload.status === "COMPLETED") {
+            setWarningToast(
+              "🏁 The live stage has been concluded by the proctor. Your submissions have been finalized."
+            );
+            setTimeout(() => {
+              router.push(`/participant/quiz/${currentData.quizId}/results`);
+            }, 1200);
+          }
+        }
+      } catch (e) {
+        // Ignore background polling errors
+      }
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [currentData.attemptId, currentData.quizId, router]);
 
   // 3. Anti-Cheat Visibility & Blur Telemetry
   useEffect(() => {
@@ -373,27 +451,40 @@ export default function TimedQuizRunnerClient({
         {/* Bottom Actions Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white border-4 border-black shadow-[6px_6px_0px_#000] mb-6">
           {/* Previous Locked Indicator (Linear Progression) */}
-          <button
-            type="button"
-            disabled
-            className="w-full sm:w-auto px-5 py-3 bg-neutral-200 border-2 border-neutral-400 text-neutral-500 font-mono text-xs font-bold uppercase cursor-not-allowed select-none"
-          >
+          <div className="w-full sm:w-auto px-4 py-2.5 bg-neutral-100 border-2 border-neutral-300 text-neutral-500 font-mono text-[11px] font-bold uppercase select-none text-center sm:text-left">
             🔒 PREVIOUS LOCKED [ONE-WAY PROGRESSION]
-          </button>
+          </div>
 
-          {/* Submit / Advance Button */}
-          <button
-            type="button"
-            onClick={handleManualSubmit}
-            disabled={isSubmitting || selectedOptionIds.length === 0}
-            className="w-full sm:w-auto px-8 py-3 bg-[#FFE600] text-black font-black uppercase text-xs sm:text-sm tracking-wider border-3 border-black shadow-[4px_4px_0px_#000] hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1 transition-transform disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isSubmitting
-              ? "VERIFYING & RECORDING..."
-              : isLastQuestion
-              ? "SUBMIT & FINALIZE COMPETITION →"
-              : "CONFIRM CHOICE & NEXT QUESTION →"}
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            {/* Skip / Advance Forward Without Submitting Button */}
+            <button
+              type="button"
+              onClick={executeSkip}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto px-5 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-bold uppercase text-xs sm:text-sm tracking-wider border-3 border-black shadow-[3px_3px_0px_#000] hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1 transition-transform disabled:opacity-40 cursor-pointer text-center"
+              title="Advance to next question without submitting. Unsubmitted questions receive 0 credit."
+            >
+              {isSubmitting
+                ? "ADVANCING..."
+                : isLastQuestion
+                ? "SKIP & FINALIZE →"
+                : "NEXT QUESTION (SKIP) →"}
+            </button>
+
+            {/* Confirm & Submit Answer Button */}
+            <button
+              type="button"
+              onClick={handleManualSubmit}
+              disabled={isSubmitting || selectedOptionIds.length === 0}
+              className="w-full sm:w-auto px-7 py-3 bg-[#FFE600] text-black font-black uppercase text-xs sm:text-sm tracking-wider border-3 border-black shadow-[4px_4px_0px_#000] hover:translate-x-0.5 hover:translate-y-0.5 active:translate-x-1 active:translate-y-1 transition-transform disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-center"
+            >
+              {isSubmitting
+                ? "VERIFYING & RECORDING..."
+                : isLastQuestion
+                ? "SUBMIT & FINALIZE →"
+                : "CONFIRM CHOICE & SUBMIT →"}
+            </button>
+          </div>
         </div>
 
         {/* Security Footer Notice */}

@@ -7,14 +7,19 @@ import QuizLobbyClient from "@/components/participant/QuizLobbyClient";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ code?: string }>;
 }
 
-export default async function ParticipantQuizLobbyPage({ params }: PageProps) {
+export default async function ParticipantQuizLobbyPage({
+  params,
+  searchParams,
+}: PageProps) {
   const session = await requireRole(
     ["PARTICIPANT", "ADMIN", "SUPER_ADMIN"],
     "/participant/dashboard"
   );
   const { id } = await params;
+  const { code } = await searchParams;
 
   const [quiz] = await db
     .select()
@@ -48,13 +53,13 @@ export default async function ParticipantQuizLobbyPage({ params }: PageProps) {
           id: quiz.id,
           title: quiz.title,
           description: quiz.description,
-          roomCode: quiz.roomCode,
           sessionStatus: quiz.sessionStatus,
           totalQuestions: quiz.totalQuestions,
           totalPoints: quiz.totalPoints,
           defaultTimePerQuestionSec: quiz.defaultTimePerQuestionSec,
           showTabSwitchCount: quiz.showTabSwitchCount,
         }}
+        initialPasscode={code || ""}
         existingAttempt={existingAttempt || null}
         userName={session.name}
         userTeam={session.teamName || null}

@@ -8,8 +8,11 @@ import { quizzes } from "@/db/schema";
 import {
   startOrResumeQuizAttempt,
   submitQuestionAnswer,
+  skipOrAdvanceQuestion,
   recordParticipantProctorEvent,
   getAuthoritativeCurrentQuestion,
+  validateRoomCodeForEntry,
+  validateQuizPasscode,
 } from "@/lib/participant-quiz-service";
 import { logActivity } from "@/lib/activity-log-service";
 
@@ -28,11 +31,12 @@ async function getRequiredParticipantSession() {
 }
 
 export async function startQuizAttemptAction(
-  quizId: string
+  quizId: string,
+  passcode?: string
 ): Promise<ActionResult<{ attemptId: string; status: string; message: string }>> {
   try {
     const session = await getRequiredParticipantSession();
-    const result = await startOrResumeQuizAttempt(quizId, session);
+    const result = await startOrResumeQuizAttempt(quizId, session, passcode);
     await logActivity({
       actorId: session.userId,
       actorRole: session.role,
@@ -47,6 +51,31 @@ export async function startQuizAttemptAction(
     return { success: true, data: result };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to start quiz attempt.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function skipQuestionAction(
+  attemptId: string,
+  questionId: string
+): Promise<ActionResult<{ isCompleted: boolean; nextIndex: number }>> {
+  try {
+    const session = await getRequiredParticipantSession();
+    const result = await skipOrAdvanceQuestion(attemptId, questionId, session);
+    if (result.isCompleted) {
+      await logActivity({
+        actorId: session.userId,
+        actorRole: session.role,
+        action: "PARTICIPANT_QUIZ_COMPLETED",
+        category: "QUIZ",
+        targetEntity: "PARTICIPANT_ATTEMPT",
+        targetId: attemptId,
+      });
+    }
+    revalidatePath(`/participant/quiz`);
+    return { success: true, data: result };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to advance question.";
     return { success: false, error: msg };
   }
 }
@@ -102,28 +131,27 @@ export async function reportProctorViolationAction(
 
 export async function joinQuizByRoomCodeAction(
   roomCode: string
-): Promise<ActionResult<{ quizId: string }>> {
+): Promise<ActionResult<{ quizId: string; roomCode: string }>> {
   try {
     await getRequiredParticipantSession();
-    const normalizedCode = roomCode.trim().toUpperCase();
-
-    const [quiz] = await db
-      .select({ id: quizzes.id, sessionStatus: quizzes.sessionStatus })
-      .from(quizzes)
-      .where(eq(quizzes.roomCode, normalizedCode))
-      .limit(1);
-
-    if (!quiz) {
-      return { success: false, error: `No competition found with Room Code "${normalizedCode}".` };
-    }
-
-    if (quiz.sessionStatus === "DRAFT") {
-      return { success: false, error: "This competition room is not open for participants." };
-    }
-
-    return { success: true, data: { quizId: quiz.id } };
+    const result = await validateRoomCodeForEntry(roomCode);
+    return { success: true, data: { quizId: result.quizId, roomCode: result.roomCode } };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to join room.";
+    return { success: false, error: msg };
+  }
+}
+
+export async function verifyQuizPasscodeAction(
+  quizId: string,
+  passcode: string
+): Promise<ActionResult<{ quizId: string; roomCode: string }>> {
+  try {
+    await getRequiredParticipantSession();
+    const result = await validateQuizPasscode(quizId, passcode);
+    return { success: true, data: result };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Verification failed.";
     return { success: false, error: msg };
   }
 }

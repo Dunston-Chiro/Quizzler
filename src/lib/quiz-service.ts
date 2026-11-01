@@ -6,6 +6,7 @@ import {
   participantAttempts,
   participantAnswers,
   proctoringEvents,
+  quizAccessRequests,
   users,
   Quiz,
   Question,
@@ -57,20 +58,50 @@ export function assertAdminRole(session: SessionPayload): void {
 }
 
 /**
- * Asserts ownership: Super-admin can access anything; Admin can only access their own.
+ * Checks if another admin has been granted full access to a quiz
  */
-export function assertOwnership(
+export async function hasApprovedQuizAccess(
+  quizId: string,
+  userId: string
+): Promise<boolean> {
+  const [approved] = await db
+    .select({ id: quizAccessRequests.id })
+    .from(quizAccessRequests)
+    .where(
+      and(
+        eq(quizAccessRequests.quizId, quizId),
+        eq(quizAccessRequests.requestingAdminId, userId),
+        eq(quizAccessRequests.status, "APPROVED")
+      )
+    )
+    .limit(1);
+
+  return Boolean(approved);
+}
+
+/**
+ * Asserts ownership or approved full-control:
+ * Super-admin can access anything; Creator owns it;
+ * Or another admin with an APPROVED access request has full control.
+ */
+export async function assertOwnership(
   ownerId: string,
   session: SessionPayload,
-  resourceName = "Resource"
-): void {
+  resourceName = "Resource",
+  quizId?: string
+): Promise<void> {
   assertAdminRole(session);
   if (session.role === "SUPER_ADMIN") return;
-  if (ownerId !== session.userId) {
-    throw new Error(
-      `ACCESS_DENIED: You do not have permission to manage this ${resourceName}. It belongs to another organizer.`
-    );
+  if (ownerId === session.userId) return;
+
+  if (quizId) {
+    const hasAccess = await hasApprovedQuizAccess(quizId, session.userId);
+    if (hasAccess) return;
   }
+
+  throw new Error(
+    `ACCESS_DENIED: You do not have permission to manage this ${resourceName}. It belongs to another organizer.`
+  );
 }
 
 /**
@@ -93,6 +124,7 @@ export async function getAdminQuizzes(session: SessionPayload) {
       showLeaderboard: quizzes.showLeaderboard,
       showTabSwitchCount: quizzes.showTabSwitchCount,
       isSharedWithAdmins: quizzes.isSharedWithAdmins,
+      showInArena: quizzes.showInArena,
       defaultTimePerQuestionSec: quizzes.defaultTimePerQuestionSec,
       totalQuestions: quizzes.totalQuestions,
       totalPoints: quizzes.totalPoints,
@@ -112,7 +144,32 @@ export async function getAdminQuizzes(session: SessionPayload) {
     );
   }
 
-  return await query.orderBy(desc(quizzes.updatedAt));
+  const list = await query.orderBy(desc(quizzes.updatedAt));
+
+  // Fetch access requests for this admin to compute full-control permissions
+  const accessRequests = await db
+    .select({
+      id: quizAccessRequests.id,
+      quizId: quizAccessRequests.quizId,
+      status: quizAccessRequests.status,
+    })
+    .from(quizAccessRequests)
+    .where(eq(quizAccessRequests.requestingAdminId, session.userId));
+
+  const reqMap = new Map(accessRequests.map((r) => [r.quizId, r]));
+
+  return list.map((quiz) => {
+    const isOwner = quiz.createdBy === session.userId || session.role === "SUPER_ADMIN";
+    const req = reqMap.get(quiz.id);
+    const hasApprovedAccess = req?.status === "APPROVED";
+    return {
+      ...quiz,
+      isOwner,
+      hasFullControl: isOwner || hasApprovedAccess,
+      accessRequestStatus: req ? req.status : null,
+      accessRequestId: req ? req.id : null,
+    };
+  });
 }
 
 /**
@@ -195,14 +252,15 @@ export async function getQuizWithQuestions(
 
   const isOwner = quiz.createdBy === session.userId;
   const isSuperAdmin = session.role === "SUPER_ADMIN";
-  const isShared = Boolean(quiz.isSharedWithAdmins);
+  const hasFullAccess = await hasApprovedQuizAccess(quiz.id, session.userId);
+  const isShared = Boolean(quiz.isSharedWithAdmins) || hasFullAccess;
 
   // If not owner, not super-admin, and not shared with admins, strictly deny access
   if (!isOwner && !isSuperAdmin && !isShared) {
-    assertOwnership(quiz.createdBy, session, "Quiz");
+    await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
   }
 
-  const isReadOnly = !isOwner && !isSuperAdmin;
+  const isReadOnly = !isOwner && !isSuperAdmin && !hasFullAccess;
 
   // Fetch questions
   const quizQuestions = await db
@@ -264,7 +322,7 @@ export async function updateQuiz(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const updateData: Partial<Quiz> = {
     updatedAt: new Date(),
@@ -310,7 +368,7 @@ export async function deleteQuiz(quizId: string, session: SessionPayload) {
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   if (quiz.sessionStatus === "LIVE") {
     throw new Error("CORRUPTION_PREVENTION: Cannot delete a quiz that is currently LIVE.");
@@ -350,7 +408,7 @@ export async function createQuestion(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   if (!input.questionText || input.questionText.trim().length < 2) {
     throw new Error("VALIDATION_ERROR: Question prompt is required.");
@@ -426,8 +484,8 @@ export async function updateQuestion(
 
   if (!question) throw new Error("NOT_FOUND: Question does not exist.");
 
-  // Strict ownership check: Must be question owner or super-admin
-  assertOwnership(question.createdBy, session, "Question");
+  // Strict ownership check: Must be question owner, super-admin, or admin with full control of parent quiz
+  await assertOwnership(question.createdBy, session, "Question", question.quizId);
 
   // Also check parent quiz
   const [quiz] = await db
@@ -437,7 +495,7 @@ export async function updateQuestion(
     .limit(1);
 
   if (quiz) {
-    assertOwnership(quiz.createdBy, session, "Parent Quiz");
+    await assertOwnership(quiz.createdBy, session, "Parent Quiz", quiz.id);
 
     // Check if participants have already submitted answers for this question
     const [existingAnswer] = await db
@@ -491,7 +549,7 @@ export async function deleteQuestion(
   if (!question) throw new Error("NOT_FOUND: Question does not exist.");
 
   // Strict ownership check
-  assertOwnership(question.createdBy, session, "Question");
+  await assertOwnership(question.createdBy, session, "Question", question.quizId);
 
   const [quiz] = await db
     .select()
@@ -500,7 +558,7 @@ export async function deleteQuestion(
     .limit(1);
 
   if (quiz) {
-    assertOwnership(quiz.createdBy, session, "Parent Quiz");
+    await assertOwnership(quiz.createdBy, session, "Parent Quiz", quiz.id);
 
     // Check if participants have answers
     const [existingAnswer] = await db
@@ -550,7 +608,7 @@ export async function reorderQuestions(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   if (quiz.sessionStatus === "LIVE") {
     throw new Error("CORRUPTION_PREVENTION: Cannot reorder questions during a LIVE quiz session.");
@@ -585,7 +643,7 @@ export async function updateQuizStatus(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   if (newStatus === "LIVE") {
     const [qCount] = await db
@@ -596,6 +654,23 @@ export async function updateQuizStatus(
     if (!qCount || Number(qCount.count) === 0) {
       throw new Error("VALIDATION_ERROR: Cannot launch a quiz with 0 questions. Add at least 1 question first.");
     }
+  }
+
+  // Auto-submit all active attempts when admin closes/ends the activity
+  if (newStatus === "ENDED") {
+    const now = new Date();
+    await db
+      .update(participantAttempts)
+      .set({
+        status: "COMPLETED",
+        completedAt: now,
+      })
+      .where(
+        and(
+          eq(participantAttempts.quizId, quizId),
+          eq(participantAttempts.status, "IN_PROGRESS")
+        )
+      );
   }
 
   const [updated] = await db
@@ -627,7 +702,7 @@ export async function toggleResultVisibility(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const [updated] = await db
     .update(quizzes)
@@ -658,7 +733,7 @@ export async function toggleLeaderboardVisibility(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const [updated] = await db
     .update(quizzes)
@@ -689,7 +764,7 @@ export async function toggleTabSwitchCountVisibility(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const [updated] = await db
     .update(quizzes)
@@ -720,7 +795,7 @@ export async function toggleQuizSharing(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const [updated] = await db
     .update(quizzes)
@@ -759,7 +834,7 @@ export async function toggleAttemptQualification(
     .limit(1);
 
   if (!quiz) throw new Error("NOT_FOUND: Associated quiz not found.");
-  assertOwnership(quiz.createdBy, session, "Quiz");
+  await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
 
   const [updated] = await db
     .update(participantAttempts)
@@ -789,15 +864,16 @@ export async function getLiveStageTelemetry(
 
   const isOwner = quiz.createdBy === session.userId;
   const isSuperAdmin = session.role === "SUPER_ADMIN";
-  const isShared = Boolean(quiz.isSharedWithAdmins);
+  const hasFullAccess = await hasApprovedQuizAccess(quiz.id, session.userId);
+  const isShared = Boolean(quiz.isSharedWithAdmins) || hasFullAccess;
 
   if (!isOwner && !isSuperAdmin) {
     if (!isShared) {
-      assertOwnership(quiz.createdBy, session, "Quiz");
+      await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
     }
   }
 
-  const isReadOnly = !isOwner && !isSuperAdmin;
+  const isReadOnly = !isOwner && !isSuperAdmin && !hasFullAccess;
 
   // Retrieve creator's info
   const [creator] = await db
@@ -951,13 +1027,14 @@ export async function getStudentAttemptReview(
 
   const isOwner = quiz.createdBy === session.userId;
   const isSuperAdmin = session.role === "SUPER_ADMIN";
-  const isShared = Boolean(quiz.isSharedWithAdmins);
+  const hasFullAccess = await hasApprovedQuizAccess(quiz.id, session.userId);
+  const isShared = Boolean(quiz.isSharedWithAdmins) || hasFullAccess;
 
   if (!isOwner && !isSuperAdmin && !isShared) {
-    assertOwnership(quiz.createdBy, session, "Quiz");
+    await assertOwnership(quiz.createdBy, session, "Quiz", quiz.id);
   }
 
-  const isReadOnly = !isOwner && !isSuperAdmin;
+  const isReadOnly = !isOwner && !isSuperAdmin && !hasFullAccess;
 
   // Retrieve attempt
   const [attempt] = await db
@@ -1074,4 +1151,217 @@ export async function getStudentAttemptReview(
     isReadOnly,
     questions: questionsReview,
   };
+}
+
+/**
+ * 15. Toggle Quiz Arena Visibility
+ */
+export async function toggleQuizArenaVisibility(
+  quizId: string,
+  showInArena: boolean,
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [quiz] = await db
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
+  await assertOwnership(quiz.createdBy, session, "Quiz Visibility", quiz.id);
+
+  const [updated] = await db
+    .update(quizzes)
+    .set({
+      showInArena,
+      updatedAt: new Date(),
+    })
+    .where(eq(quizzes.id, quizId))
+    .returning();
+
+  return updated;
+}
+
+/**
+ * 16. Request Full Administrative Control for a Quiz
+ */
+export async function requestQuizFullAccess(
+  quizId: string,
+  session: SessionPayload,
+  note?: string
+) {
+  assertAdminRole(session);
+
+  const [quiz] = await db
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.id, quizId))
+    .limit(1);
+
+  if (!quiz) throw new Error("NOT_FOUND: Quiz does not exist.");
+
+  if (quiz.createdBy === session.userId) {
+    throw new Error("VALIDATION_ERROR: You already own this quiz.");
+  }
+
+  // Check if an existing request exists
+  const [existingRequest] = await db
+    .select()
+    .from(quizAccessRequests)
+    .where(
+      and(
+        eq(quizAccessRequests.quizId, quizId),
+        eq(quizAccessRequests.requestingAdminId, session.userId)
+      )
+    )
+    .limit(1);
+
+  if (existingRequest) {
+    if (existingRequest.status === "PENDING") {
+      throw new Error("DUPLICATE_REQUEST: A pending access request already exists for this quiz.");
+    }
+    if (existingRequest.status === "APPROVED") {
+      return { success: true, status: "APPROVED", message: "You already have full control of this quiz." };
+    }
+    // If REJECTED, update to PENDING again
+    const [updated] = await db
+      .update(quizAccessRequests)
+      .set({
+        status: "PENDING",
+        note: note?.trim() || null,
+        updatedAt: new Date(),
+        respondedAt: null,
+        respondedBy: null,
+      })
+      .where(eq(quizAccessRequests.id, existingRequest.id))
+      .returning();
+
+    return { success: true, requestId: updated.id, status: "PENDING" };
+  }
+
+  const [created] = await db
+    .insert(quizAccessRequests)
+    .values({
+      quizId,
+      requestingAdminId: session.userId,
+      ownerId: quiz.createdBy,
+      status: "PENDING",
+      note: note?.trim() || null,
+    })
+    .returning();
+
+  return { success: true, requestId: created.id, status: "PENDING" };
+}
+
+/**
+ * 17. Respond to Quiz Full Control Request (Allow / Reject)
+ */
+export async function respondToQuizAccessRequest(
+  requestId: string,
+  decision: "APPROVED" | "REJECTED",
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [request] = await db
+    .select()
+    .from(quizAccessRequests)
+    .where(eq(quizAccessRequests.id, requestId))
+    .limit(1);
+
+  if (!request) throw new Error("NOT_FOUND: Access request does not exist.");
+
+  // Only the creator or super-admin can approve/reject
+  if (session.role !== "SUPER_ADMIN" && request.ownerId !== session.userId) {
+    throw new Error("ACCESS_DENIED: Only the quiz owner or super-admin can respond to access requests.");
+  }
+
+  if (request.status !== "PENDING") {
+    throw new Error(`INVALID_STATE: Request has already been ${request.status}.`);
+  }
+
+  const [updated] = await db
+    .update(quizAccessRequests)
+    .set({
+      status: decision,
+      respondedAt: new Date(),
+      respondedBy: session.userId,
+      updatedAt: new Date(),
+    })
+    .where(eq(quizAccessRequests.id, requestId))
+    .returning();
+
+  return { success: true, decision: updated.status, requestId: updated.id };
+}
+
+/**
+ * 18. Cancel a Pending Quiz Access Request
+ */
+export async function cancelQuizAccessRequest(
+  requestId: string,
+  session: SessionPayload
+) {
+  assertAdminRole(session);
+
+  const [request] = await db
+    .select()
+    .from(quizAccessRequests)
+    .where(eq(quizAccessRequests.id, requestId))
+    .limit(1);
+
+  if (!request) throw new Error("NOT_FOUND: Request not found.");
+
+  if (session.role !== "SUPER_ADMIN" && request.requestingAdminId !== session.userId) {
+    throw new Error("ACCESS_DENIED: You can only cancel your own requests.");
+  }
+
+  if (request.status !== "PENDING") {
+    throw new Error("INVALID_STATE: Only pending requests can be cancelled.");
+  }
+
+  await db
+    .delete(quizAccessRequests)
+    .where(eq(quizAccessRequests.id, requestId));
+
+  return { success: true };
+}
+
+/**
+ * 19. Get Pending Access Requests for Admin Dashboard
+ */
+export async function getAdminAccessRequestsOverview(session: SessionPayload) {
+  assertAdminRole(session);
+
+  let query = db
+    .select({
+      id: quizAccessRequests.id,
+      quizId: quizAccessRequests.quizId,
+      quizTitle: quizzes.title,
+      requestingAdminId: quizAccessRequests.requestingAdminId,
+      requestingAdminName: users.name,
+      requestingAdminEmail: users.email,
+      ownerId: quizAccessRequests.ownerId,
+      status: quizAccessRequests.status,
+      note: quizAccessRequests.note,
+      createdAt: quizAccessRequests.createdAt,
+    })
+    .from(quizAccessRequests)
+    .innerJoin(quizzes, eq(quizAccessRequests.quizId, quizzes.id))
+    .innerJoin(users, eq(quizAccessRequests.requestingAdminId, users.id))
+    .$dynamic();
+
+  if (session.role !== "SUPER_ADMIN") {
+    query = query.where(
+      and(
+        eq(quizAccessRequests.ownerId, session.userId),
+        eq(quizAccessRequests.status, "PENDING")
+      )
+    );
+  } else {
+    query = query.where(eq(quizAccessRequests.status, "PENDING"));
+  }
+
+  return await query.orderBy(desc(quizAccessRequests.createdAt));
 }

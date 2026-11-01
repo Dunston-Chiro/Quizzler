@@ -328,7 +328,7 @@ async function runSuperAdminGovernanceTests() {
     // Launch quiz to LIVE
     await db.update(quizzes).set({ sessionStatus: "LIVE" }).where(eq(quizzes.id, quiz.id));
 
-    const attemptRes = await startOrResumeQuizAttempt(quiz.id, participantSession);
+    const attemptRes = await startOrResumeQuizAttempt(quiz.id, participantSession, quiz.roomCode || undefined);
     const participantQ = await getAuthoritativeCurrentQuestion(attemptRes.attemptId, participantSession);
 
     if ("question" in participantQ) {

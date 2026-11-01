@@ -50,6 +50,13 @@
       "when": 1793343318947,
       "tag": "0006_silly_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793479108065,
+      "tag": "0007_careless_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

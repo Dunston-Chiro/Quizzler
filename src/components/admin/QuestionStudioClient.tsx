@@ -9,6 +9,7 @@ import {
   deleteQuestionAction,
   reorderQuestionsAction,
   updateQuizAction,
+  toggleQuizArenaVisibilityAction,
 } from "@/app/actions/admin-quiz";
 import { QuestionInput } from "@/lib/quiz-service";
 
@@ -37,6 +38,7 @@ interface QuizItem {
   resultsReleased: boolean;
   showTabSwitchCount?: boolean;
   isSharedWithAdmins?: boolean;
+  showInArena?: boolean;
   defaultTimePerQuestionSec: number;
   totalQuestions: number;
   totalPoints: number;
@@ -75,6 +77,9 @@ export default function QuestionStudioClient({
   );
   const [editIsSharedWithAdmins, setEditIsSharedWithAdmins] = useState(
     Boolean(quiz.isSharedWithAdmins)
+  );
+  const [editShowInArena, setEditShowInArena] = useState(
+    Boolean(quiz.showInArena ?? true)
   );
 
   // Question Form State (for adding or editing)
@@ -318,6 +323,9 @@ export default function QuestionStudioClient({
       });
 
       if (res.success && res.data) {
+        if (editShowInArena !== Boolean(quiz.showInArena ?? true)) {
+          await toggleQuizArenaVisibilityAction(quiz.id, editShowInArena);
+        }
         setQuiz((prev) => ({
           ...prev,
           title: editTitle.trim(),
@@ -326,6 +334,7 @@ export default function QuestionStudioClient({
           defaultTimePerQuestionSec: Number(editTimer) || 30,
           showTabSwitchCount: editShowTabSwitchCount,
           isSharedWithAdmins: editIsSharedWithAdmins,
+          showInArena: editShowInArena,
         }));
         setShowSettingsModal(false);
         router.refresh();
@@ -905,6 +914,21 @@ export default function QuestionStudioClient({
                 </label>
                 <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
                   Allow other authenticated administrators to observe this live quiz session in view-only mode.
+                </p>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editShowInArena}
+                    onChange={(e) => setEditShowInArena(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <span>Show in Competition Arena</span>
+                </label>
+                <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
+                  When enabled, this quiz is visible in the student competition arena. When disabled, the quiz is hidden from public student view.
                 </p>
               </div>
 
