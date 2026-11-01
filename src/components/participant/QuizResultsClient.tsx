@@ -152,6 +152,7 @@ export default function QuizResultsClient({
                   <th className="py-2.5 px-3">Rank</th>
                   <th className="py-2.5 px-3">Team / Leader</th>
                   <th className="py-2.5 px-3">Institution</th>
+                  <th className="py-2.5 px-3 text-right">Time</th>
                   <th className="py-2.5 px-3 text-right">Score</th>
                 </tr>
               </thead>
@@ -200,6 +201,9 @@ export default function QuizResultsClient({
                       </td>
                       <td className="py-3 px-3 font-mono font-bold text-neutral-700">
                         {team.collegeName}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold text-neutral-600">
+                        {team.timeSpentSeconds !== undefined ? formatTime(team.timeSpentSeconds) : "—"}
                       </td>
                       <td className="py-3 px-3 text-right font-mono font-black text-base text-black">
                         {team.score} PTS

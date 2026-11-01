@@ -66,10 +66,12 @@ export interface QuizAttemptResultPayload {
   }>;
   leaderboard?: Array<{
     rank: number;
+    attemptId?: string;
     teamName: string;
     userName: string;
     collegeName: string;
     score: number;
+    timeSpentSeconds?: number;
     completedAt: Date | null;
   }>;
 }
@@ -846,9 +848,12 @@ export async function getParticipantResults(
   // Build Leaderboard if enabled
   let leaderboardData: QuizAttemptResultPayload["leaderboard"] = undefined;
   if (quiz.showLeaderboard || quiz.resultsReleased) {
-    const topAttempts = await db
+    // 1. Fetch all selected candidates from the list
+    const selectedAttempts = await db
       .select({
+        attemptId: participantAttempts.id,
         score: participantAttempts.totalScore,
+        startedAt: participantAttempts.startedAt,
         completedAt: participantAttempts.completedAt,
         teamName: users.teamName,
         userName: users.name,
@@ -859,19 +864,50 @@ export async function getParticipantResults(
       .where(
         and(
           eq(participantAttempts.quizId, quiz.id),
-          eq(participantAttempts.status, "COMPLETED"),
           eq(participantAttempts.qualifiedForNextRound, true)
         )
-      )
-      .orderBy(desc(participantAttempts.totalScore), asc(participantAttempts.completedAt))
-      .limit(10);
+      );
 
-    leaderboardData = topAttempts.map((item, index) => ({
+    // 2. Calculate time spent in seconds for each selected candidate
+    const candidatesWithTime = selectedAttempts.map((item) => {
+      const started = item.startedAt ? new Date(item.startedAt).getTime() : 0;
+      const completed = item.completedAt ? new Date(item.completedAt).getTime() : Date.now();
+      const timeSpentSeconds =
+        started > 0 ? Math.max(0, Math.floor((completed - started) / 1000)) : 0;
+      return {
+        ...item,
+        timeSpentSeconds,
+      };
+    });
+
+    // 3. Sort with two conditions:
+    //    Primary condition: score (descending)
+    //    Secondary condition: time (ascending - faster completion ranks higher)
+    //    Tertiary tie-breaker: earlier completion timestamp
+    candidatesWithTime.sort((a, b) => {
+      // Primary: score descending
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      // Secondary: time ascending
+      if (a.timeSpentSeconds !== b.timeSpentSeconds) {
+        return a.timeSpentSeconds - b.timeSpentSeconds;
+      }
+      // Tertiary tie-breaker: completedAt
+      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+
+    // 4. Return top 10 finalists
+    leaderboardData = candidatesWithTime.slice(0, 10).map((item, index) => ({
       rank: index + 1,
+      attemptId: item.attemptId,
       teamName: item.teamName || item.userName,
       userName: item.userName,
       collegeName: item.collegeName || "BIMTECH",
       score: item.score,
+      timeSpentSeconds: item.timeSpentSeconds,
       completedAt: item.completedAt,
     }));
   }

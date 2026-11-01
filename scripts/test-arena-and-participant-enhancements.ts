@@ -348,6 +348,72 @@ async function runEnhancementTests() {
     "Unqualified Student 2 does NOT appear on leaderboard"
   );
 
+  // Verification 4b: Two-condition sorting: Primary score (desc), Secondary time (asc)
+  // [#example: A(2000, 8 min), B(2000, 6 min), C(1900, 3 min) -> Order: B, A, C]
+  const userA = await getOrCreateUser("arena.candA@test.com", "Candidate A", "PARTICIPANT");
+  const userB = await getOrCreateUser("arena.candB@test.com", "Candidate B", "PARTICIPANT");
+  const userC = await getOrCreateUser("arena.candC@test.com", "Candidate C", "PARTICIPANT");
+
+  const baseDate = new Date("2026-11-01T10:00:00Z");
+  const [attA] = await db
+    .insert(participantAttempts)
+    .values({
+      quizId: testQuiz.id,
+      userId: userA.id,
+      totalScore: 2000,
+      startedAt: baseDate,
+      completedAt: new Date(baseDate.getTime() + 8 * 60 * 1000), // 8 min
+      status: "COMPLETED",
+      qualifiedForNextRound: true,
+      currentQuestionIndex: 3,
+    })
+    .returning();
+
+  const [attB] = await db
+    .insert(participantAttempts)
+    .values({
+      quizId: testQuiz.id,
+      userId: userB.id,
+      totalScore: 2000,
+      startedAt: baseDate,
+      completedAt: new Date(baseDate.getTime() + 6 * 60 * 1000), // 6 min
+      status: "COMPLETED",
+      qualifiedForNextRound: true,
+      currentQuestionIndex: 3,
+    })
+    .returning();
+
+  const [attC] = await db
+    .insert(participantAttempts)
+    .values({
+      quizId: testQuiz.id,
+      userId: userC.id,
+      totalScore: 1900,
+      startedAt: baseDate,
+      completedAt: new Date(baseDate.getTime() + 3 * 60 * 1000), // 3 min
+      status: "COMPLETED",
+      qualifiedForNextRound: true,
+      currentQuestionIndex: 3,
+    })
+    .returning();
+
+  const sortResults = await getParticipantResults(attA.id, {
+    userId: userA.id,
+    name: userA.name,
+    email: userA.email,
+    role: "PARTICIPANT",
+    expiresAt: new Date(Date.now() + 3600000),
+  });
+
+  const top3Names = sortResults.leaderboard?.slice(0, 3).map((item) => item.userName);
+  assert(
+    top3Names?.[0] === "Candidate B" &&
+      top3Names?.[1] === "Candidate A" &&
+      top3Names?.[2] === "Candidate C",
+    "Leaderboard two-condition sort: Primary score (desc), Secondary time (asc) -> B, A, C",
+    `Expected [Candidate B, Candidate A, Candidate C], got: ${JSON.stringify(top3Names)}`
+  );
+
   // 6. Admin-to-Admin Full Control Request System
   console.log("\n[TEST SECTION 5] Admin-to-Admin Access Request & Delegation");
 
